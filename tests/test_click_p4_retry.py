@@ -82,18 +82,23 @@ def test_axpress_ok_verify_no_triggers_p4_coordinate_click(layer, monkeypatch):
         lambda elem, role, atype="click": (True, "AXPress"),
     )
     # First verify (after AXPress) → no (stub no-op detected).
-    # Second verify (after P4 coordinate click) → yes (real change observed).
+    # The 1.6 activate-retry then fires: _activate_app is mocked out (no real
+    # app to bring forward), the re-press is still ok, and the SECOND verify
+    # → still no. Only then does _click fall through to P4, whose verify → yes.
     call_log = {"verify_calls": []}
 
-    def fake_verify(elem, role, action, expected_text=None):
+    def fake_verify(elem, role, action, expected_text=None, **kw):
         call_idx = len(call_log["verify_calls"])
         call_log["verify_calls"].append({"elem": elem, "action": action})
-        # 1st call (from AXPress path) → NO; 2nd call (from P4 retry) → YES
-        if call_idx == 0:
+        # 1st call (AXPress path) and 2nd (activate-retry) → NO;
+        # 3rd call (P4 coordinate click) → YES (real change observed).
+        if call_idx < 2:
             return {"verified": "no", "signal": "button_press", "samples": 15, "matched_at_ms": None}
         return {"verified": "yes", "signal": "button_press", "samples": 2, "matched_at_ms": 124.5}
 
     monkeypatch.setattr(layer, "_verify_action", fake_verify)
+    # No real app to activate: neutralize the 1.6 focus-retry's side effects.
+    monkeypatch.setattr(layer, "_activate_app", lambda app: None, raising=False)
 
     # Also mock the Quartz CGEvent path so we don't need ApplicationServices.
     fired = {"mouse_events": 0}
@@ -123,10 +128,9 @@ def test_axpress_ok_verify_no_triggers_p4_coordinate_click(layer, monkeypatch):
 
     # P4 must have fired.
     assert fired["mouse_events"] >= 2  # down + up = 2 events
-    # _verify_action called twice: once for AXPress, once for P4 coordinate
-    assert len(call_log["verify_calls"]) == 2
-    assert call_log["verify_calls"][0]["action"] == "click"
-    assert call_log["verify_calls"][1]["action"] == "click"
+    # _verify_action called 3×: AXPress, activate-retry, P4 coordinate
+    assert len(call_log["verify_calls"]) == 3
+    assert all(c["action"] == "click" for c in call_log["verify_calls"])
     # Final LayerResult.signal is ok=True with verified=yes on coordinate path.
     assert result.ok is True
     assert "CGEvent" in result.message
@@ -157,7 +161,7 @@ def test_axpress_ok_verify_yes_skips_p4(layer, monkeypatch):
     )
     verify_calls = {"n": 0}
 
-    def fake_verify(elem, role, action, expected_text=None):
+    def fake_verify(elem, role, action, expected_text=None, **kw):
         verify_calls["n"] += 1
         return {"verified": "yes", "signal": "button_press", "samples": 1, "matched_at_ms": 80.0}
 
@@ -209,7 +213,7 @@ def test_both_axpress_and_p4_verify_no_surface_clear(layer, monkeypatch):
         lambda elem, role, atype="click": (True, "AXPress"),
     )
 
-    def fake_verify(elem, role, action, expected_text=None):
+    def fake_verify(elem, role, action, expected_text=None, **kw):
         # Both attempts return NO.
         return {"verified": "no", "signal": "button_press", "samples": 25, "matched_at_ms": None}
 

@@ -469,8 +469,15 @@ def observe(
 
     s = load()
     if s is None:
-        # Auto-start with web context — most common.
-        s = new(context="web", layer="web_a11y")
+        # Auto-start with web context — most common. EXCEPT when the caller
+        # explicitly scoped a desktop app (--app/--pid/--window): routing a
+        # "look at Calculator" observe to a blank web page returned 0 elements
+        # and confused every agent that forgot `session start --context
+        # desktop` first. Desktop scoping implies the desktop context.
+        if app or pid or window:
+            s = new(context="desktop", layer="desktop_ax")
+        else:
+            s = new(context="web", layer="web_a11y")
 
     chosen_layer = layer or s.layer
     L = get_layer(chosen_layer)

@@ -379,9 +379,27 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 
 def clean_text(s: Optional[str], max_len: int = 200) -> str:
-    """Collapse whitespace and truncate. Empty → ""."""
-    if not s:
+    """Collapse whitespace and truncate. Empty → "".
+
+    Tolerates non-string inputs: CDP's a11y tree types ``value.value`` by
+    the underlying DOM property, so ``<input type=number/range>`` yields an
+    **int** (e.g. ``3``, not ``"3"``) — and a raw int into ``re.sub`` raised
+    ``TypeError: expected string or bytes-like object`` which killed the
+    entire observe (any page with a quantity slider). Coerce here so every
+    call site is safe, present and future.
+    """
+    if s is None or s == "":
         return ""
+    if isinstance(s, bool):
+        # aria-checked from CDP is a real bool; render as the string an LLM
+        # expects in a value field. (False falls through the generic path
+        # below and yields "false", matching checkbox AXValue semantics.)
+        s = "true" if s else "false"
+    elif not isinstance(s, str):
+        # CDP types <input type=number/range> values as int/float — a raw
+        # 0 into `if not s` used to collapse to "" and a raw int into
+        # re.sub raised TypeError. str() both; 0 is a legitimate slider value.
+        s = str(s)
     s = _WHITESPACE_RE.sub(" ", s).strip()
     if len(s) > max_len:
         s = s[: max_len - 1] + "…"

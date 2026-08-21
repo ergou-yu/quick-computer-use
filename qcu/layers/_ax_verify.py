@@ -179,6 +179,7 @@ class Snapshot:
     element_alive: bool = True             # False = element no longer resolvable
     window_title_hash: tuple[int, str] = (0, "")
     window_count: int = 0
+    window_text_hash: tuple[int, str] = (0, "")
     timestamp: float = 0.0
 
     @classmethod
@@ -257,7 +258,8 @@ def snapshot(target: Any, ax_getter: Callable[..., Any], *, app: Any = None) -> 
     except Exception:
         pass
 
-    # Window-scope signals (window title change, window count change).
+    # Window-scope signals (window title change, window count change, and the
+    # text content of the focused window).
     if app is not None:
         try:
             _, windows = ax_getter(__import__("ApplicationServices").AXUIElementCopyAttributeValue,
@@ -268,10 +270,47 @@ def snapshot(target: Any, ax_getter: Callable[..., Any], *, app: Any = None) -> 
                 _, t = ax_getter(__import__("ApplicationServices").AXUIElementCopyAttributeValue,
                                  wins[0], "AXTitle")
                 snap.window_title_hash = hash_string(t)
+                snap.window_text_hash = _window_text_hash(wins[0], ax_getter)
         except Exception:
             pass
 
     return snap
+
+
+def _window_text_hash(win: Any, ax_getter: Callable[..., Any]) -> tuple[int, str]:
+    """Hash the text content of a window (AXStaticText values, node-capped).
+
+    Why: buttons whose effect lands on a *different* element — Calculator's
+    keypad updates the display field, media keys update a time label, steppers
+    update a readout — never change their own AXValue/children. Watching the
+    window's text captures those effects and turns a verify=false-negative
+    (which used to cascade into a 3 s Apple Events fallback) into a match.
+
+    Bounded cost: stops after TREE_NODE_SAMPLE_CAP nodes; only reads AXValue
+    for nodes whose role is AXStaticText.
+    """
+    AS = __import__("ApplicationServices")
+    texts: list[str] = []
+    seen = 0
+    stack = [win]
+    while stack and seen < TREE_NODE_SAMPLE_CAP:
+        el = stack.pop()
+        seen += 1
+        try:
+            _, role = ax_getter(AS.AXUIElementCopyAttributeValue, el, "AXRole")
+            if role == "AXStaticText":
+                _, v = ax_getter(AS.AXUIElementCopyAttributeValue, el, "AXValue")
+                if v:
+                    texts.append(str(v))
+        except Exception:
+            continue
+        try:
+            _, kids = ax_getter(AS.AXUIElementCopyAttributeValue, el, "AXChildren")
+            for k in (kids or []):
+                stack.append(k)
+        except Exception:
+            continue
+    return hash_string("\x1f".join(texts))
 
 
 def verify(
@@ -416,6 +455,11 @@ def _match_signal(
             return True
         if before.focused != after.focused and after.focused is not None:
             return True
+        # Effect landed elsewhere in the window (Calculator keypad → display,
+        # media key → time label). Watching the window's text content turns
+        # the historical false-negative into a match.
+        if before.window_text_hash != after.window_text_hash:
+            return True
         return False
     if signal == SignalClass.MENU_OPEN:
         # Menu item that opens a panel/modal: window title or count changes,
@@ -423,6 +467,7 @@ def _match_signal(
         return (
             before.window_title_hash != after.window_title_hash
             or before.window_count != after.window_count
+            or before.window_text_hash != after.window_text_hash
             or (not before.children_count_capped and not after.children_count_capped
                 and before.children_count != after.children_count)
         )

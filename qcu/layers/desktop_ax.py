@@ -283,11 +283,58 @@ class DesktopAXLayer(Layer):
                 front = None
         if front is None and options.get("app"):
             needle = str(options["app"]).lower().removesuffix(".app")
+            candidates = []
             for a in ws.runningApplications():
                 n = (a.localizedName() or "").lower().removesuffix(".app")
                 if n == needle:
-                    front = a
-                    break
+                    candidates.append(a)
+            # Health-probe EVERY candidate (even a single one): in a long-lived
+            # daemon the NSWorkspace list can retain a stale proxy for a
+            # process that died and relaunched (observed: Calculator quit+
+            # reopen — the list still returned the DEAD pid, observe got 0
+            # elements, while a fresh process saw the new pid). A live windowed
+            # app always exposes ≥1 AXWindow; probe and take the first healthy.
+            from ApplicationServices import AXUIElementCreateApplication as _acf
+            for a in candidates:
+                try:
+                    perr, pwins = _ax_get(
+                        AXUIElementCopyAttributeValue,
+                        _acf(a.processIdentifier()), "AXWindows",
+                    )
+                    if perr == 0 and (pwins or []):
+                        front = a
+                        break
+                except Exception:
+                    continue
+            if front is None and candidates:
+                # No healthy NSWorkspace candidate: resolve the live pid from
+                # the Quartz window list — a window owned by the app proves
+                # both that the pid is alive and that it's the right process.
+                try:
+                    from Quartz import (CGWindowListCopyWindowInfo,
+                                        kCGWindowListOptionOnScreenOnly,
+                                        kCGNullWindowID)
+                    dead = {c.processIdentifier() for c in candidates}
+                    for w in CGWindowListCopyWindowInfo(
+                        kCGWindowListOptionOnScreenOnly, kCGNullWindowID
+                    ):
+                        owner = str(w.get("kCGWindowOwnerName") or "")
+                        p = w.get("kCGWindowOwnerPID")
+                        if (owner.lower().removesuffix(".app") == needle
+                                and p and int(p) not in dead):
+                            class _Shim:  # minimal duck-type for processIdentifier()
+                                def __init__(self, pid):
+                                    self._pid = int(pid)
+                                def processIdentifier(self):
+                                    return self._pid
+                                def localizedName(self):
+                                    return owner
+                            front = _Shim(p)
+                            break
+                except Exception:
+                    pass
+            if front is None and candidates:
+                front = candidates[-1]  # last resort: newest entry
         # Priority 1: the explicitly-targeted app (set by launch_app/activate_app
         # and persisted to session). This matters most when QCU runs in the
         # background — menuBarOwningApplication then reports the CALLER (ZCode),
@@ -317,6 +364,34 @@ class DesktopAXLayer(Layer):
                 routing_meta={"layer": self.name, "error": "no frontmost application"},
             )
         app = AXUIElementCreateApplication(front.processIdentifier())
+
+        # Stale-pid guard: in a long-lived daemon, NSWorkspace can hand back a
+        # cached NSRunningApplication for a pid whose process died and was
+        # relaunched (observed: Calculator quit + reopened; the daemon kept
+        # matching the NAME to the dead pid's proxy, AXWindows came back
+        # empty/errored, and observe returned 0 elements — while `observe
+        # --pid <new>` worked fine, proving the tree itself was healthy).
+        # Probe the resolved pid: if AXWindows yields nothing (empty OR error),
+        # re-resolve by name and take the entry with a DIFFERENT, live pid.
+        try:
+            werr, wins_now = _ax_get(AXUIElementCopyAttributeValue, app, "AXWindows")
+            if werr != 0 or not (wins_now or []):
+                needle = (self._target_app or
+                          (options.get("app") or "")).lower().removesuffix(".app")
+                front_pid = front.processIdentifier()
+                fresh_pid = None
+                for a in ws.runningApplications():
+                    n = (a.localizedName() or "").lower().removesuffix(".app")
+                    if n and n == needle:
+                        p = a.processIdentifier()
+                        # Prefer a different pid (relaunch); same pid adds nothing.
+                        if p != front_pid:
+                            fresh_pid = p
+                            break
+                if fresh_pid is not None:
+                    app = AXUIElementCreateApplication(fresh_pid)
+        except Exception:
+            pass
 
         title = ""
         try:
@@ -422,6 +497,21 @@ class DesktopAXLayer(Layer):
                 # a plain edit, hiding its real function).
                 if subrole == "AXSearchField":
                     role_norm = "searchbox"
+                # SwiftUI controls (Calculator keypad, most modern Apple apps)
+                # keep their accessible label in AXDescription, not AXTitle —
+                # without this fallback every SwiftUI button is anonymous
+                # ("button ''") and the LLM can only guess by list position.
+                # Fetched only for interactive elements with an empty title so
+                # the role-first traversal stays cheap.
+                if not name_s:
+                    try:
+                        desc_err, desc = _ax_get(
+                            AXUIElementCopyAttributeValue, elem, "AXDescription"
+                        )
+                    except Exception:
+                        desc_err, desc = -1, None
+                    if desc_err == 0 and desc:
+                        name_s = clean_text(str(desc))
                 value_s = clean_text(str(value), max_len=1000) if value_err == 0 and value else ""
 
                 bounds: Optional[Rect] = None
@@ -1091,6 +1181,41 @@ class DesktopAXLayer(Layer):
         except Exception:
             return False, None
 
+    @staticmethod
+    def _elem_pid(elem: Any) -> Optional[int]:
+        """Pid of the process that owns an AXUIElementRef.
+
+        Handles the pyobjc quirk that the C out-parameter comes back as an
+        ``(err, pid)`` tuple. Returns None on any failure — callers treat
+        that as "no window-scope verification possible".
+        """
+        try:
+            from ApplicationServices import AXUIElementGetPid
+            got = AXUIElementGetPid(elem, None)
+            if isinstance(got, tuple):
+                got = got[1] if len(got) > 1 and got[0] == 0 else None
+            return int(got) if got else None
+        except Exception:
+            return None
+
+    def _pre_action_snapshot(self, elem: Any) -> Any:
+        """Snapshot the element's AX state BEFORE an action fires.
+
+        Failure-tolerant: returns None (verify falls back to snapshotting in
+        _verify_action, which is only correct for not-yet-fired actions) when
+        the AX probe can't run.
+        """
+        try:
+            from qcu.layers._ax_verify import snapshot
+            pid = self._elem_pid(elem) or self._app_pid_for(self._target_app)
+            app_elem = None
+            if pid:
+                from ApplicationServices import AXUIElementCreateApplication
+                app_elem = AXUIElementCreateApplication(pid)
+            return snapshot(elem, _ax_get, app=app_elem)
+        except Exception:
+            return None
+
     def _verify_action(
         self,
         elem: Any,
@@ -1098,6 +1223,8 @@ class DesktopAXLayer(Layer):
         action: str,
         *,
         expected_text: Optional[str] = None,
+        window_ms: Optional[int] = None,
+        before: Optional[Any] = None,
     ) -> dict[str, Any]:
         """Run the post-action verification loop. Returns a dict the caller
         merges into ``LayerResult.data``.
@@ -1106,6 +1233,15 @@ class DesktopAXLayer(Layer):
         ``samples``. Failure here means the action may have been a stub
         no-op; the caller (``_click``) should fall back to P4 (coordinate
         click) and re-verify.
+
+        ``before``: a pre-action Snapshot taken by the caller BEFORE firing
+        the action. Historically this function snapshot-ped after the action
+        had already fired (the AXPress happened in ``_ax_native_click`` and
+        only THEN did we capture "before") — so for fast effects (Calculator
+        keypad → display flips within the press RTT) before==after and the
+        verify could NEVER match. Callers that can should pass ``before``;
+        when omitted we snapshot here (correct only for actions not yet
+        fired, e.g. the fill path which snapshots before AXValue setattr).
         """
         try:
             from qcu.layers._ax_verify import (
@@ -1117,9 +1253,17 @@ class DesktopAXLayer(Layer):
             else:
                 sig = signal_for(role, action)
 
-            # Probe the application element for window-scope signals.
+            # Probe the application element for window-scope signals. Prefer
+            # the pid OWNED BY THE TARGET ELEMENT itself: AXUIElementGetPid
+            # queries the live AX runtime and can't be stale. The name-based
+            # NSWorkspace lookup (_app_pid_for) shares the daemon's possibly-
+            # cached process list — after an app quit+relaunch it returns the
+            # DEAD pid, AXWindows on it is always empty, and window-scope
+            # verify signals silently never fire (the Calculator verify bug).
             app_elem = None
-            pid = self._app_pid_for(self._target_app)
+            pid = self._elem_pid(elem)
+            if not pid:
+                pid = self._app_pid_for(self._target_app)
             if pid:
                 try:
                     from ApplicationServices import AXUIElementCreateApplication
@@ -1127,7 +1271,8 @@ class DesktopAXLayer(Layer):
                 except Exception:
                     app_elem = None
 
-            before = snapshot(elem, _ax_get, app=app_elem)
+            if before is None:
+                before = snapshot(elem, _ax_get, app=app_elem)
             verdict = verify(
                 before,
                 signal=sig,
@@ -1135,6 +1280,7 @@ class DesktopAXLayer(Layer):
                 ax_getter=_ax_get,
                 target=elem,
                 app=app_elem,
+                window_ms=window_ms,
             )
             return {
                 "verified": verdict.verified.value,
@@ -1188,13 +1334,18 @@ class DesktopAXLayer(Layer):
             elem = self._resolve_ax_element(ref)
             if elem is not None:
                 role = (self._last_refs.get(ref) or {}).get("role", "")
+                # Pre-action snapshot BEFORE the press: fast effects (Calculator
+                # keypad → display) land within the AXPress round-trip, so a
+                # snapshot taken after the press already shows the new state
+                # and before==after — verify could never match (the 1.5 bug).
+                pre_snap = self._pre_action_snapshot(elem)
                 ok_ax, act_name = self._ax_native_click(elem, role, atype)
                 if ok_ax:
                     # Critical: AXPress returning err=0 doesn't guarantee
                     # the action took effect (Electron stub no-op returns 0).
                     # Run the post-action verify loop; if it's a stub no-op,
                     # fall through to coordinate click + re-verify.
-                    verify_meta = self._verify_action(elem, role, atype)
+                    verify_meta = self._verify_action(elem, role, atype, before=pre_snap)
                     verified = verify_meta.get("verified", "n/a")
                     if verified == "yes":
                         return LayerResult(
@@ -1207,7 +1358,59 @@ class DesktopAXLayer(Layer):
                             data={"verification": verify_meta},
                         )
                     # verified=NO or N/A: AXPress may have been a no-op.
-                    # Fall through to coordinate click and re-verify there.
+                    # One known cause is focus: apps that ignore AXPress
+                    # while backgrounded (Calculator keypad verified by
+                    # probe: err=0, zero effect, works after activation).
+                    # Retry ONCE after bringing the target app forward —
+                    # cheaper and more precise than jumping straight to the
+                    # coordinate/AppleEvents fallbacks (which cost 3+s when
+                    # the element has no bounds).
+                    retry_meta = None
+                    if verified != "yes":
+                        # Resolve the owning app: prefer the session target,
+                        # else derive from the element's pid (works when
+                        # observe was --app-scoped and _target_app is unset).
+                        target_name = self._target_app
+                        if not target_name:
+                            try:
+                                from AppKit import NSWorkspace  # type: ignore
+                                got = self._elem_pid(elem)
+                                if got:
+                                    for a in NSWorkspace.sharedWorkspace().runningApplications():
+                                        if int(a.processIdentifier()) == got:
+                                            target_name = a.localizedName()
+                                            break
+                            except Exception:
+                                target_name = None
+                        if target_name:
+                            try:
+                                self._activate_app(target_name)
+                                time.sleep(0.3)
+                                ok_ax2, act_name2 = self._ax_native_click(elem, role, atype)
+                                if ok_ax2:
+                                    # Wider window: the effect can land late
+                                    # right after an activation (app cold-
+                                    # draw), and if this retry also misses
+                                    # we'd burn 3+s in the Apple Events
+                                    # fallback for an effect that DID happen.
+                                    retry_meta = self._verify_action(
+                                        elem, role, atype, window_ms=2500
+                                    )
+                                    if retry_meta.get("verified") == "yes":
+                                        return LayerResult(
+                                            ok=True,
+                                            layer=self.name,
+                                            message=(
+                                                f"click ref={ref} (via AXPress={act_name2} "
+                                                f"after activate_app, verified at "
+                                                f"{retry_meta.get('matched_at_ms')}ms)"
+                                            ),
+                                            data={"verification": retry_meta},
+                                        )
+                            except Exception:
+                                retry_meta = None
+                    # Still no effect: fall through to coordinate click and
+                    # re-verify there.
                     axpress_failed_reason = (
                         f"AXPress err=0 but verify={verified} "
                         f"(signal={verify_meta.get('signal')}, "

@@ -3,6 +3,52 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.6] — 2026-08-21
+
+### Fixed
+- **`qcu observe` crashed on numeric input values.** CDP's a11y tree types
+  `value.value` by the DOM property, so `<input type=number/range>` yields an
+  **int** and `aria-checked` a **bool**; a raw int into `clean_text`'s
+  `re.sub` raised `TypeError` and killed the whole observe (any page with a
+  quantity field). `clean_text` now coerces non-strings (bool → "true"/"false",
+  0 → "0" — a legitimate slider value, previously collapsed to "").
+- **SwiftUI buttons were anonymous.** macOS SwiftUI controls keep their
+  accessible label in `AXDescription`, not `AXTitle`; QCU read only AXTitle,
+  so Calculator's keypad (and most modern Apple apps) surfaced 54 unnamed
+  buttons the LLM could only guess by list position. The walk now falls back
+  to AXDescription for interactive elements with an empty title (fetched
+  lazily, so the role-first traversal stays fast).
+- **Verify could never match fast effects (before-snapshot ordering).**
+  `_click` fired AXPress and only THEN captured the "before" snapshot inside
+  `_verify_action` — for effects that land within the press round-trip
+  (Calculator keypad → display) before==after and verify always returned no,
+  cascading into 3+s Apple Events fallbacks for clicks that HAD worked
+  (4.5–8.8 s wall time, `ok=false`). The snapshot is now taken before the
+  press and passed through. Measured: verified digit click now **64 ms**
+  (foreground) / **84 ms** (background, activate-retry path), 8/8 verified.
+- **Daemon `verify` used a stale app pid.** `_verify_action` resolved the app
+  element by NAME via NSWorkspace — whose process list is cached forever in a
+  long-lived daemon (after an app quit+relaunch it returns the dead pid;
+  AXWindows on it is empty, so window-scope verify signals silently never
+  fired). It now derives the pid from the target element itself via
+  `AXUIElementGetPid` (live AX runtime, cannot be stale).
+- **Daemon observed a dead pid after app relaunch (0 elements).** Same cached
+  NSWorkspace list: after Calculator quit+reopen, `observe --app Calculator`
+  kept resolving the dead pid's proxy and returned 0 elements while
+  `observe --pid <new>` worked. Every name-matched candidate is now
+  health-probed (AXWindows non-empty); when all candidates are dead the live
+  pid is resolved from the Quartz window list. Same-daemon observe across a
+  quit+reopen cycle: 276 → 0 (broken) → **276 (fixed)**.
+- **`observe --app/--pid/--window` without a session routed to web.** The
+  auto-start default (`context=web`) ignored explicit desktop scoping, so
+  "look at Calculator" with no prior `session start` returned a blank
+  about:blank web observation. Desktop scoping now implies `context=desktop`.
+- **Background no-op clicks are retried after activation.** Apps that ignore
+  AXPress while backgrounded (Calculator keypad, probe-verified: err=0, zero
+  effect) now get one focused retry: resolve the owning app (element pid →
+  NSWorkspace), activate, re-press, re-verify with a widened 2.5 s window —
+  before falling through to the slow coordinate/Apple Events paths.
+
 ## [1.5] — 2026-08-21
 
 ### Changed
