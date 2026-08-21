@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# qcu shim — invoke the Python package from anywhere.
+# Use as:  ./scripts/qcu session start
+#          ./scripts/qcu observe
+#          ./scripts/qcu act '{"type":"click","ref":"ref_42"}'
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 -m qcu "$@"

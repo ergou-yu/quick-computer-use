@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qcu"
+version = "1.5"
+description = "Quick Computer Use — a faster computer-use skill that prefers a11y trees over screenshots"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "QCU contributors" }]
+dependencies = [
+    "playwright>=1.40",
+]
+
+[project.optional-dependencies]
+macos = [
+    "pyobjc-framework-ApplicationServices>=10.0",
+    "pyobjc-framework-Quartz>=10.0",
+]
+windows = [
+    "uiautomation>=2.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+qcu = "qcu.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["qcu*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires a real Chromium browser",
+    "macos: requires macOS Accessibility permission",
+]
+testpaths = ["tests"]
