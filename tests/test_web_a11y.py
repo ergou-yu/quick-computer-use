@@ -1,4 +1,4 @@
-"""Tests for ``qcu.layers.web_a11y`` — ref injection + fill fallback.
+"""Tests for ``qcu.layers.web_a11y`` — ref checks and single-dispatch fills.
 
 These run as unit tests by stubbing out the Playwright surface so we
 don't need a real browser. The end-to-end path is covered by manual
@@ -143,6 +143,7 @@ async def test_fill_uses_locator_when_ref_in_dom():
     loc = MagicMock()
     loc.count = AsyncMock(return_value=1)
     loc.fill = AsyncMock()
+    loc.evaluate = AsyncMock(return_value="alice@example.com")
     page.locator.return_value = loc
 
     cdp = _fake_cdp()
@@ -155,9 +156,8 @@ async def test_fill_uses_locator_when_ref_in_dom():
 
 
 @pytest.mark.asyncio
-async def test_fill_falls_back_to_coord_and_keyboard():
-    """When the DOM annotation is missing AND coord cache exists, we should
-    click at cached coords, select-all, and type. No more 'ref not in DOM'."""
+async def test_fill_missing_annotation_never_uses_cached_coordinates():
+    """An old rectangle is not evidence that the original field still exists."""
     page = _fake_page()
     loc = MagicMock()
     loc.count = AsyncMock(return_value=0)  # attribute missing
@@ -173,14 +173,11 @@ async def test_fill_falls_back_to_coord_and_keyboard():
     layer = _make_layer_with_refs(page, cdp)
     result = await layer._fill(page, {"ref": "ref_42", "text": "hi"})
 
-    assert result.ok is True
-    assert "coord+keyboard" in result.message
-    page.mouse.click.assert_awaited_once()
-    # Select-all (Meta+A on Mac, Control+A elsewhere), Delete, then type.
-    presses = [c.args[0] for c in page.keyboard.press.await_args_list]
-    assert any(p in ("Meta+A", "Control+A") for p in presses)
-    assert "Delete" in presses
-    page.keyboard.type.assert_awaited_with("hi")
+    assert result.ok is False
+    assert result.dispatch_state == "not_sent"
+    page.mouse.click.assert_not_called()
+    page.keyboard.press.assert_not_called()
+    page.keyboard.type.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -214,7 +211,7 @@ async def test_fill_errors_when_no_ref_param():
     layer = _make_layer_with_refs(page, _fake_cdp())
     result = await layer._fill(page, {"text": "x"})
     assert result.ok is False
-    assert "fill needs params.ref" in result.message
+    assert result.dispatch_state == "not_sent"
 
 
 # ---------------------------------------------------------------------------
@@ -223,14 +220,15 @@ async def test_fill_errors_when_no_ref_param():
 
 
 @pytest.mark.asyncio
-async def test_goto_with_retry_succeeds_after_transient_error():
+async def test_navigation_does_not_replay_transient_error():
     page = _fake_page()
     page.goto.side_effect = [
         Exception("net::ERR_CONNECTION_CLOSED"),
         None,
     ]
-    await wa._goto_with_retry(page, "https://example.com", attempts=3)
-    assert page.goto.await_count == 2
+    with pytest.raises(Exception, match="ERR_CONNECTION_CLOSED"):
+        await wa._goto_with_retry(page, "https://example.com", attempts=3)
+    assert page.goto.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -251,8 +249,9 @@ async def test_goto_with_retry_retries_multiple_transient():
         Exception("net::ERR_CONNECTION_CLOSED"),
         None,
     ]
-    await wa._goto_with_retry(page, "https://example.com", attempts=3)
-    assert page.goto.await_count == 3
+    with pytest.raises(Exception, match="ERR_NETWORK_CHANGED"):
+        await wa._goto_with_retry(page, "https://example.com", attempts=3)
+    assert page.goto.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -262,7 +261,7 @@ async def test_goto_with_retry_eventually_gives_up():
     with pytest.raises(Exception) as exc:
         await wa._goto_with_retry(page, "https://example.com", attempts=2)
     assert "ERR_CONNECTION_CLOSED" in str(exc.value)
-    assert page.goto.await_count == 2
+    assert page.goto.await_count == 1
 
 
 # ---------------------------------------------------------------------------

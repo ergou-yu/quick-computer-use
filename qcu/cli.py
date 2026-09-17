@@ -73,6 +73,10 @@ def _build_parser() -> argparse.ArgumentParser:
     op.add_argument("--limit", type=int, default=None, help="maximum elements to return")
     op.add_argument("--offset", type=int, default=0, help="skip matching elements")
     op.add_argument("--compact", action="store_true", help="omit null and bulky fields")
+    op.add_argument("--wait-until", choices=["domcontentloaded", "networkidle"], default="domcontentloaded",
+                    help="web readiness policy; network idle is opt-in")
+    op.add_argument("--wait-for", default=None, help="web: wait for this known CSS selector to be visible")
+    op.add_argument("--timeout-ms", type=int, default=3000, help="web readiness timeout (1..60000 ms)")
     op.add_argument("--role", default=None, help="filter elements by exact role")
     op.add_argument("--name", default=None, help="filter elements by name substring")
     op.add_argument("--app", default=None,
@@ -101,6 +105,12 @@ def _build_parser() -> argparse.ArgumentParser:
     ap = sub.add_parser("act", help="perform an action")
     ap.add_argument("action", help="action JSON, e.g. '{\"type\":\"click\",\"params\":{\"ref\":\"ref_42\"}}'")
     ap.add_argument("--layer", default=None, help="force a specific layer")
+
+    bp = sub.add_parser("batch", help="run observed form fills and one final action in one call")
+    bp.add_argument("actions", help="JSON array of 1..32 actions; only fills before the final action")
+    bp.add_argument("--layer", default=None)
+    bp.add_argument("--observe", action="store_true", help="return a fresh observation after execution")
+    bp.add_argument("--compact", action="store_true", help="compact the final observation")
 
     # route
     rp = sub.add_parser("route", help="show routing decision for given features")
@@ -180,6 +190,9 @@ def main(argv: list[str] | None = None) -> int:
                 app=getattr(args, "app", None),
                 pid=getattr(args, "pid", None),
                 window=getattr(args, "window", None),
+                wait_until=args.wait_until,
+                wait_for=args.wait_for,
+                timeout_ms=args.timeout_ms,
             )
         if args.cmd == "find":
             return h.find(
@@ -193,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
             return h.inspect(args.ref, compact=getattr(args, "compact", False))
         if args.cmd == "act":
             return h.act(args.action, layer=args.layer)
+        if args.cmd == "batch":
+            return h.batch(args.actions, layer=args.layer, observe_after=args.observe, compact=args.compact)
         if args.cmd == "route":
             return h.route(args.features)
         if args.cmd == "stats":

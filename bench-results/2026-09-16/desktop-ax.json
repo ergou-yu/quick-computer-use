@@ -1,0 +1,4582 @@
+{
+  "summary": {
+    "rounds": 3,
+    "observe_p50_ms": 175.814124988392,
+    "observe_n": 3,
+    "click_p50_ms": 177.62231244705617,
+    "click_n": 12,
+    "elements": 58,
+    "verified_final": [
+      "verified",
+      "verified",
+      "verified"
+    ],
+    "runs": [
+      {
+        "round": 0,
+        "elements": 58,
+        "wall_ms": 1634.1152070090175,
+        "last_outcome": "verified",
+        "last_dispatch": "sent"
+      },
+      {
+        "round": 1,
+        "elements": 58,
+        "wall_ms": 898.4981649555266,
+        "last_outcome": "verified",
+        "last_dispatch": "sent"
+      },
+      {
+        "round": 2,
+        "elements": 58,
+        "wall_ms": 853.5916669061407,
+        "last_outcome": "verified",
+        "last_dispatch": "sent"
+      }
+    ]
+  },
+  "records": [
+    {
+      "argv": [
+        "session",
+        "start",
+        "--context",
+        "desktop"
+      ],
+      "wall_ms": 371.4866249356419,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "resumed": false,
+        "session": {
+          "active": true,
+          "schema_version": 2,
+          "status": "prepared",
+          "session_id": "02ff8081-3bbe-419e-a57e-13f0cca99845",
+          "context": "desktop",
+          "layer": "desktop_ax",
+          "pid": 82843,
+          "started_at": 1789518486.721897,
+          "age_seconds": 0.0012371540069580078,
+          "browser_channel": null,
+          "browser_debug_port": null,
+          "browser_pid": null,
+          "browser_alive": false,
+          "browser_status": "stopped",
+          "daemon_pid": null,
+          "daemon_port": null,
+          "daemon_alive": false,
+          "daemon_status": "stopped",
+          "headless": true,
+          "user_data_dir": null,
+          "profile_owned": false,
+          "current_url": null,
+          "observation_generation": 0,
+          "document_generation": 0,
+          "document_id": null,
+          "has_last_observation": false,
+          "n_refs_cached": 0,
+          "extras": {}
+        },
+        "capabilities": {
+          "backend": "desktop_ax",
+          "platform": "darwin",
+          "implemented": true,
+          "dependencies_present": true,
+          "dependency": "ApplicationServices",
+          "session_accessible": null,
+          "can_read_controls": null,
+          "supported_actions": [
+            "click",
+            "fill",
+            "press_key",
+            "scroll"
+          ],
+          "result_verification": true,
+          "foreground_input_required": "action_dependent",
+          "available": false,
+          "reason": "target_not_probed",
+          "verification_status": null
+        },
+        "permissions": {
+          "accessibility": {
+            "granted": true,
+            "url": "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+          },
+          "input_monitoring": {
+            "granted": true,
+            "url": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+          },
+          "screen_recording": {
+            "granted": true,
+            "url": "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+          }
+        }
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "observe",
+        "--pid",
+        "82839",
+        "--window",
+        "Calculator",
+        "--compact"
+      ],
+      "wall_ms": 781.816583010368,
+      "rc": 0,
+      "result": {
+        "context": "desktop",
+        "url_or_app": "Calculator",
+        "title": "Calculator",
+        "elements": [
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_0",
+            "role": "button",
+            "name": "Open Parenthesis",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_1",
+            "role": "button",
+            "name": "Close Parenthesis",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_2",
+            "role": "button",
+            "name": "Clear Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_3",
+            "role": "button",
+            "name": "Add to Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_4",
+            "role": "button",
+            "name": "Subtract from Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_5",
+            "role": "button",
+            "name": "Recall Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_6",
+            "role": "button",
+            "name": "Delete",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_7",
+            "role": "button",
+            "name": "All Clear",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_8",
+            "role": "button",
+            "name": "Percent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_9",
+            "role": "button",
+            "name": "Divide",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_10",
+            "role": "checkbox",
+            "name": "Secondary Functions",
+            "value": "0",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_11",
+            "role": "button",
+            "name": "X Squared",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_12",
+            "role": "button",
+            "name": "X Cubed",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_13",
+            "role": "button",
+            "name": "X to the Y",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_14",
+            "role": "button",
+            "name": "e to the X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_15",
+            "role": "button",
+            "name": "10 to the X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_16",
+            "role": "button",
+            "name": "7",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_17",
+            "role": "button",
+            "name": "8",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_18",
+            "role": "button",
+            "name": "9",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_19",
+            "role": "button",
+            "name": "Multiply",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_20",
+            "role": "button",
+            "name": "1 over x",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_21",
+            "role": "button",
+            "name": "Square Root",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_22",
+            "role": "button",
+            "name": "Cube Root",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_23",
+            "role": "button",
+            "name": "Y root of X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_24",
+            "role": "button",
+            "name": "Natural Log",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_25",
+            "role": "button",
+            "name": "Log Base 10",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_26",
+            "role": "button",
+            "name": "4",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_27",
+            "role": "button",
+            "name": "5",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_28",
+            "role": "button",
+            "name": "6",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_29",
+            "role": "button",
+            "name": "Subtract",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_30",
+            "role": "button",
+            "name": "X Factorial",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_31",
+            "role": "button",
+            "name": "Sine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_32",
+            "role": "button",
+            "name": "Cosine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_33",
+            "role": "button",
+            "name": "Tangent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_34",
+            "role": "button",
+            "name": "e",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_35",
+            "role": "button",
+            "name": "Enter Exponent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_36",
+            "role": "button",
+            "name": "1",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_37",
+            "role": "button",
+            "name": "2",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_38",
+            "role": "button",
+            "name": "3",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_39",
+            "role": "button",
+            "name": "Add",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_40",
+            "role": "button",
+            "name": "Random Number",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_41",
+            "role": "button",
+            "name": "Hyperbolic Sine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_42",
+            "role": "button",
+            "name": "Hyperbolic Cosine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_43",
+            "role": "button",
+            "name": "Hyperbolic Tangent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_44",
+            "role": "button",
+            "name": "Pi",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_45",
+            "role": "button",
+            "name": "Radians",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_46",
+            "role": "button",
+            "name": "Change Sign",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_47",
+            "role": "button",
+            "name": "0",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_48",
+            "role": "button",
+            "name": "Point",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_49",
+            "role": "button",
+            "name": "Equals",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_50",
+            "role": "button",
+            "name": "Show Sidebar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 122.0,
+              "y": 512.0,
+              "width": 48.0,
+              "height": 52.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_51",
+            "role": "button",
+            "name": "Show Sidebar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 126.5,
+              "y": 520.0,
+              "width": 39.5,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_52",
+            "role": "button",
+            "name": "Mode",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 648.0,
+              "y": 512.0,
+              "width": 44.0,
+              "height": 52.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_53",
+            "role": "button",
+            "name": "Change Mode",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 652.0,
+              "y": 520.0,
+              "width": 36.0,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_54",
+            "role": "button",
+            "name": "calculator.fill",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 652.0,
+              "y": 520.0,
+              "width": 36.0,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_55",
+            "role": "button",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 40.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_56",
+            "role": "button",
+            "enabled": false,
+            "focused": false,
+            "bounds": {
+              "x": 86.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_57",
+            "role": "button",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 63.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          }
+        ],
+        "routing_meta": {
+          "layer": "desktop_ax",
+          "trusted": true,
+          "target": {
+            "pid": 82839,
+            "app": "Calculator",
+            "window_title": "Calculator",
+            "window_handle": "1668327862",
+            "bounds": {
+              "X": 22.0,
+              "Y": 512.0,
+              "Width": 674.0,
+              "Height": 408.0
+            },
+            "window_id": 69954
+          },
+          "ref_scope": {
+            "backend": "desktop_ax",
+            "lifecycle": "10ca99596d3f43f1a5acec07be4bea58",
+            "target": {
+              "pid": 82839,
+              "app": "Calculator",
+              "window_title": "Calculator",
+              "window_handle": "1668327862",
+              "bounds": {
+                "X": 22.0,
+                "Y": 512.0,
+                "Width": 674.0,
+                "Height": 408.0
+              },
+              "window_id": 69954
+            },
+            "observation_generation": 2
+          },
+          "capabilities": {
+            "backend": "desktop_ax",
+            "platform": "darwin",
+            "implemented": true,
+            "dependencies_present": true,
+            "dependency": "ApplicationServices",
+            "session_accessible": true,
+            "can_read_controls": true,
+            "supported_actions": [
+              "click",
+              "fill",
+              "press_key",
+              "scroll"
+            ],
+            "result_verification": true,
+            "foreground_input_required": "action_dependent",
+            "available": true,
+            "reason": null,
+            "verification_status": null,
+            "target": {
+              "pid": 82839,
+              "app": "Calculator",
+              "window_title": "Calculator",
+              "window_handle": "1668327862",
+              "bounds": {
+                "X": 22.0,
+                "Y": 512.0,
+                "Width": 674.0,
+                "Height": 408.0
+              },
+              "window_id": 69954
+            }
+          },
+          "empty_tree_reason": null,
+          "n_refs": 58,
+          "n_returned": 58,
+          "n_total": 58,
+          "n_interactive": 58,
+          "tree_truncated": false,
+          "text_dropped": 0,
+          "running_apps_count": 221,
+          "running_apps_preview": [],
+          "running_apps": null
+        },
+        "raw_tree": "window 'Calculator'\n            text '\\u200e205\\u200e÷\\u200e5'\n            text '\\u200e41'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_0] button 'Open Parenthesis'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_1] button 'Close Parenthesis'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_2] button 'Clear Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_3] button 'Add to Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_4] button 'Subtract from Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_5] button 'Recall Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_6] button 'Delete'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_7] button 'All Clear'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_8] button 'Percent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_9] button 'Divide'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_10] checkbox 'Secondary Functions' = '0'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_11] button 'X Squared'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_12] button 'X Cubed'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_13] button 'X to the Y'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_14] button 'e to the X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_15] button '10 to the X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_16] button '7'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_17] button '8'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_18] button '9'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_19] button 'Multiply'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_20] button '1 over x'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_21] button 'Square Root'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_22] button 'Cube Root'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_23] button 'Y root of X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_24] button 'Natural Log'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_25] button 'Log Base 10'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_26] button '4'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_27] button '5'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_28] button '6'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_29] button 'Subtract'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_30] button 'X Factorial'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_31] button 'Sine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_32] button 'Cosine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_33] button 'Tangent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_34] button 'e'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_35] button 'Enter Exponent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_36] button '1'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_37] button '2'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_38] button '3'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_39] button 'Add'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_40] button 'Random Number'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_41] button 'Hyperbolic Sine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_42] button 'Hyperbolic Cosine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_43] button 'Hyperbolic Tangent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_44] button 'Pi'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_45] button 'Radians'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_46] button 'Change Sign'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_47] button '0'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_48] button 'Point'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_49] button 'Equals'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_50] button 'Show Sidebar'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_51] button 'Show Sidebar'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_52] button 'Mode'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_53] button 'Change Mode'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_54] button 'calculator.fill'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_55] button\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_56] button\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_57] button",
+        "elapsed_ms": 383.02,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax"
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_16\"}}"
+      ],
+      "wall_ms": 215.15508298762143,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_16 (via AXPress=AXPress, UI change at 51.8ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 51.8,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 123.3,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_16"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_39\"}}"
+      ],
+      "wall_ms": 181.4622919773683,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_39 (via AXPress=AXPress, UI change at 53.5ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 53.5,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 100.24,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_39"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_38\"}}"
+      ],
+      "wall_ms": 169.2694160155952,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_38 (via AXPress=AXPress, UI change at 51.1ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 51.1,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 81.05,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_38"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_49\", \"verify\": {\"kind\": \"text\", \"contains\": \"10\", \"timeout_ms\": 1500}}}"
+      ],
+      "wall_ms": 286.4118330180645,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click: requested postcondition confirmed",
+        "data": {
+          "verification": {
+            "verified": true,
+            "kind": "text",
+            "condition": {
+              "kind": "text",
+              "contains": "10",
+              "timeout_ms": 1500
+            },
+            "reason": "condition_matched"
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "verified",
+        "elapsed_ms": 143.03,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_2:ref_49",
+              "verify": "{'kind': 'text', 'contains': '10', 'timeout_ms': 1500}"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "observe",
+        "--pid",
+        "82839",
+        "--window",
+        "Calculator",
+        "--compact"
+      ],
+      "wall_ms": 175.814124988392,
+      "rc": 0,
+      "result": {
+        "context": "desktop",
+        "url_or_app": "Calculator",
+        "title": "Calculator",
+        "elements": [
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_0",
+            "role": "button",
+            "name": "Open Parenthesis",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_1",
+            "role": "button",
+            "name": "Close Parenthesis",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_2",
+            "role": "button",
+            "name": "Clear Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_3",
+            "role": "button",
+            "name": "Add to Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_4",
+            "role": "button",
+            "name": "Subtract from Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_5",
+            "role": "button",
+            "name": "Recall Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_6",
+            "role": "button",
+            "name": "Delete",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_7",
+            "role": "button",
+            "name": "All Clear",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_8",
+            "role": "button",
+            "name": "Percent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_9",
+            "role": "button",
+            "name": "Divide",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_10",
+            "role": "checkbox",
+            "name": "Secondary Functions",
+            "value": "0",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_11",
+            "role": "button",
+            "name": "X Squared",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_12",
+            "role": "button",
+            "name": "X Cubed",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_13",
+            "role": "button",
+            "name": "X to the Y",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_14",
+            "role": "button",
+            "name": "e to the X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_15",
+            "role": "button",
+            "name": "10 to the X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_16",
+            "role": "button",
+            "name": "7",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_17",
+            "role": "button",
+            "name": "8",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_18",
+            "role": "button",
+            "name": "9",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_19",
+            "role": "button",
+            "name": "Multiply",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_20",
+            "role": "button",
+            "name": "1 over x",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_21",
+            "role": "button",
+            "name": "Square Root",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_22",
+            "role": "button",
+            "name": "Cube Root",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_23",
+            "role": "button",
+            "name": "Y root of X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_24",
+            "role": "button",
+            "name": "Natural Log",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_25",
+            "role": "button",
+            "name": "Log Base 10",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_26",
+            "role": "button",
+            "name": "4",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_27",
+            "role": "button",
+            "name": "5",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_28",
+            "role": "button",
+            "name": "6",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_29",
+            "role": "button",
+            "name": "Subtract",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_30",
+            "role": "button",
+            "name": "X Factorial",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_31",
+            "role": "button",
+            "name": "Sine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_32",
+            "role": "button",
+            "name": "Cosine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_33",
+            "role": "button",
+            "name": "Tangent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_34",
+            "role": "button",
+            "name": "e",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_35",
+            "role": "button",
+            "name": "Enter Exponent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_36",
+            "role": "button",
+            "name": "1",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_37",
+            "role": "button",
+            "name": "2",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_38",
+            "role": "button",
+            "name": "3",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_39",
+            "role": "button",
+            "name": "Add",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_40",
+            "role": "button",
+            "name": "Random Number",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_41",
+            "role": "button",
+            "name": "Hyperbolic Sine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_42",
+            "role": "button",
+            "name": "Hyperbolic Cosine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_43",
+            "role": "button",
+            "name": "Hyperbolic Tangent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_44",
+            "role": "button",
+            "name": "Pi",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_45",
+            "role": "button",
+            "name": "Radians",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_46",
+            "role": "button",
+            "name": "Change Sign",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_47",
+            "role": "button",
+            "name": "0",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_48",
+            "role": "button",
+            "name": "Point",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_49",
+            "role": "button",
+            "name": "Equals",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_50",
+            "role": "button",
+            "name": "Show Sidebar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 122.0,
+              "y": 512.0,
+              "width": 48.0,
+              "height": 52.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_51",
+            "role": "button",
+            "name": "Show Sidebar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 126.5,
+              "y": 520.0,
+              "width": 39.5,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_52",
+            "role": "button",
+            "name": "Mode",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 648.0,
+              "y": 512.0,
+              "width": 44.0,
+              "height": 52.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_53",
+            "role": "button",
+            "name": "Change Mode",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 652.0,
+              "y": 520.0,
+              "width": 36.0,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_54",
+            "role": "button",
+            "name": "calculator.fill",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 652.0,
+              "y": 520.0,
+              "width": 36.0,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_55",
+            "role": "button",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 40.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_56",
+            "role": "button",
+            "enabled": false,
+            "focused": false,
+            "bounds": {
+              "x": 86.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_57",
+            "role": "button",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 63.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          }
+        ],
+        "routing_meta": {
+          "layer": "desktop_ax",
+          "trusted": true,
+          "target": {
+            "pid": 82839,
+            "app": "Calculator",
+            "window_title": "Calculator",
+            "window_handle": "1668327862",
+            "bounds": {
+              "X": 22.0,
+              "Y": 512.0,
+              "Width": 674.0,
+              "Height": 408.0
+            },
+            "window_id": 69954
+          },
+          "ref_scope": {
+            "backend": "desktop_ax",
+            "lifecycle": "10ca99596d3f43f1a5acec07be4bea58",
+            "target": {
+              "pid": 82839,
+              "app": "Calculator",
+              "window_title": "Calculator",
+              "window_handle": "1668327862",
+              "bounds": {
+                "X": 22.0,
+                "Y": 512.0,
+                "Width": 674.0,
+                "Height": 408.0
+              },
+              "window_id": 69954
+            },
+            "observation_generation": 4
+          },
+          "capabilities": {
+            "backend": "desktop_ax",
+            "platform": "darwin",
+            "implemented": true,
+            "dependencies_present": true,
+            "dependency": "ApplicationServices",
+            "session_accessible": true,
+            "can_read_controls": true,
+            "supported_actions": [
+              "click",
+              "fill",
+              "press_key",
+              "scroll"
+            ],
+            "result_verification": true,
+            "foreground_input_required": "action_dependent",
+            "available": true,
+            "reason": null,
+            "verification_status": null,
+            "target": {
+              "pid": 82839,
+              "app": "Calculator",
+              "window_title": "Calculator",
+              "window_handle": "1668327862",
+              "bounds": {
+                "X": 22.0,
+                "Y": 512.0,
+                "Width": 674.0,
+                "Height": 408.0
+              },
+              "window_id": 69954
+            }
+          },
+          "empty_tree_reason": null,
+          "n_refs": 58,
+          "n_returned": 58,
+          "n_total": 58,
+          "n_interactive": 58,
+          "tree_truncated": false,
+          "text_dropped": 0,
+          "running_apps_count": 221,
+          "running_apps_preview": [],
+          "running_apps": null
+        },
+        "raw_tree": "window 'Calculator'\n            text '\\u200e7\\u200e+\\u200e3'\n            text '\\u200e10'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_0] button 'Open Parenthesis'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_1] button 'Close Parenthesis'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_2] button 'Clear Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_3] button 'Add to Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_4] button 'Subtract from Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_5] button 'Recall Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_6] button 'Delete'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_7] button 'All Clear'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_8] button 'Percent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_9] button 'Divide'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_10] checkbox 'Secondary Functions' = '0'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_11] button 'X Squared'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_12] button 'X Cubed'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_13] button 'X to the Y'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_14] button 'e to the X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_15] button '10 to the X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_16] button '7'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_17] button '8'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_18] button '9'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_19] button 'Multiply'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_20] button '1 over x'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_21] button 'Square Root'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_22] button 'Cube Root'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_23] button 'Y root of X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_24] button 'Natural Log'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_25] button 'Log Base 10'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_26] button '4'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_27] button '5'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_28] button '6'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_29] button 'Subtract'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_30] button 'X Factorial'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_31] button 'Sine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_32] button 'Cosine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_33] button 'Tangent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_34] button 'e'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_35] button 'Enter Exponent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_36] button '1'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_37] button '2'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_38] button '3'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_39] button 'Add'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_40] button 'Random Number'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_41] button 'Hyperbolic Sine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_42] button 'Hyperbolic Cosine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_43] button 'Hyperbolic Tangent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_44] button 'Pi'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_45] button 'Radians'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_46] button 'Change Sign'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_47] button '0'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_48] button 'Point'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_49] button 'Equals'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_50] button 'Show Sidebar'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_51] button 'Show Sidebar'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_52] button 'Mode'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_53] button 'Change Mode'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_54] button 'calculator.fill'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_55] button\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_56] button\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_57] button",
+        "elapsed_ms": 86.75,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax"
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_16\"}}"
+      ],
+      "wall_ms": 187.8557080635801,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_16 (via AXPress=AXPress, UI change at 50.4ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 50.4,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 100.21,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_16"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_39\"}}"
+      ],
+      "wall_ms": 165.74220801703632,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_39 (via AXPress=AXPress, UI change at 54.6ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 54.6,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 84.63,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_39"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_38\"}}"
+      ],
+      "wall_ms": 173.78233291674405,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_38 (via AXPress=AXPress, UI change at 52.4ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 52.4,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 87.46,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_38"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_49\", \"verify\": {\"kind\": \"text\", \"contains\": \"10\", \"timeout_ms\": 1500}}}"
+      ],
+      "wall_ms": 195.30379096977413,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click: requested postcondition confirmed",
+        "data": {
+          "verification": {
+            "verified": true,
+            "kind": "text",
+            "condition": {
+              "kind": "text",
+              "contains": "10",
+              "timeout_ms": 1500
+            },
+            "reason": "condition_matched"
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "verified",
+        "elapsed_ms": 121.94,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_4:ref_49",
+              "verify": "{'kind': 'text', 'contains': '10', 'timeout_ms': 1500}"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "observe",
+        "--pid",
+        "82839",
+        "--window",
+        "Calculator",
+        "--compact"
+      ],
+      "wall_ms": 159.83983397018164,
+      "rc": 0,
+      "result": {
+        "context": "desktop",
+        "url_or_app": "Calculator",
+        "title": "Calculator",
+        "elements": [
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_0",
+            "role": "button",
+            "name": "Open Parenthesis",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_1",
+            "role": "button",
+            "name": "Close Parenthesis",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_2",
+            "role": "button",
+            "name": "Clear Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_3",
+            "role": "button",
+            "name": "Add to Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_4",
+            "role": "button",
+            "name": "Subtract from Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_5",
+            "role": "button",
+            "name": "Recall Memory",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_6",
+            "role": "button",
+            "name": "Delete",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_7",
+            "role": "button",
+            "name": "All Clear",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_8",
+            "role": "button",
+            "name": "Percent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_9",
+            "role": "button",
+            "name": "Divide",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 645.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_10",
+            "role": "checkbox",
+            "name": "Secondary Functions",
+            "value": "0",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_11",
+            "role": "button",
+            "name": "X Squared",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_12",
+            "role": "button",
+            "name": "X Cubed",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_13",
+            "role": "button",
+            "name": "X to the Y",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_14",
+            "role": "button",
+            "name": "e to the X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_15",
+            "role": "button",
+            "name": "10 to the X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_16",
+            "role": "button",
+            "name": "7",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_17",
+            "role": "button",
+            "name": "8",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_18",
+            "role": "button",
+            "name": "9",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_19",
+            "role": "button",
+            "name": "Multiply",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 699.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_20",
+            "role": "button",
+            "name": "1 over x",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_21",
+            "role": "button",
+            "name": "Square Root",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_22",
+            "role": "button",
+            "name": "Cube Root",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_23",
+            "role": "button",
+            "name": "Y root of X",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_24",
+            "role": "button",
+            "name": "Natural Log",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_25",
+            "role": "button",
+            "name": "Log Base 10",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_26",
+            "role": "button",
+            "name": "4",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_27",
+            "role": "button",
+            "name": "5",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_28",
+            "role": "button",
+            "name": "6",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_29",
+            "role": "button",
+            "name": "Subtract",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 753.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_30",
+            "role": "button",
+            "name": "X Factorial",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_31",
+            "role": "button",
+            "name": "Sine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_32",
+            "role": "button",
+            "name": "Cosine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_33",
+            "role": "button",
+            "name": "Tangent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_34",
+            "role": "button",
+            "name": "e",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_35",
+            "role": "button",
+            "name": "Enter Exponent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_36",
+            "role": "button",
+            "name": "1",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_37",
+            "role": "button",
+            "name": "2",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_38",
+            "role": "button",
+            "name": "3",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_39",
+            "role": "button",
+            "name": "Add",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 807.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_40",
+            "role": "button",
+            "name": "Random Number",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 32.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_41",
+            "role": "button",
+            "name": "Hyperbolic Sine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 98.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_42",
+            "role": "button",
+            "name": "Hyperbolic Cosine",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 164.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_43",
+            "role": "button",
+            "name": "Hyperbolic Tangent",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 230.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_44",
+            "role": "button",
+            "name": "Pi",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 296.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_45",
+            "role": "button",
+            "name": "Radians",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 362.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_46",
+            "role": "button",
+            "name": "Change Sign",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 428.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_47",
+            "role": "button",
+            "name": "0",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 494.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_48",
+            "role": "button",
+            "name": "Point",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 560.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_49",
+            "role": "button",
+            "name": "Equals",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 626.0,
+              "y": 861.0,
+              "width": 60.0,
+              "height": 48.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_50",
+            "role": "button",
+            "name": "Show Sidebar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 122.0,
+              "y": 512.0,
+              "width": 48.0,
+              "height": 52.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_51",
+            "role": "button",
+            "name": "Show Sidebar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 126.5,
+              "y": 520.0,
+              "width": 39.5,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_52",
+            "role": "button",
+            "name": "Mode",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 648.0,
+              "y": 512.0,
+              "width": 44.0,
+              "height": 52.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_53",
+            "role": "button",
+            "name": "Change Mode",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 652.0,
+              "y": 520.0,
+              "width": 36.0,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_54",
+            "role": "button",
+            "name": "calculator.fill",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 652.0,
+              "y": 520.0,
+              "width": 36.0,
+              "height": 36.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_55",
+            "role": "button",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 40.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_56",
+            "role": "button",
+            "enabled": false,
+            "focused": false,
+            "bounds": {
+              "x": 86.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          },
+          {
+            "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_57",
+            "role": "button",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 63.0,
+              "y": 530.0,
+              "width": 16.0,
+              "height": 16.0
+            }
+          }
+        ],
+        "routing_meta": {
+          "layer": "desktop_ax",
+          "trusted": true,
+          "target": {
+            "pid": 82839,
+            "app": "Calculator",
+            "window_title": "Calculator",
+            "window_handle": "1668327862",
+            "bounds": {
+              "X": 22.0,
+              "Y": 512.0,
+              "Width": 674.0,
+              "Height": 408.0
+            },
+            "window_id": 69954
+          },
+          "ref_scope": {
+            "backend": "desktop_ax",
+            "lifecycle": "10ca99596d3f43f1a5acec07be4bea58",
+            "target": {
+              "pid": 82839,
+              "app": "Calculator",
+              "window_title": "Calculator",
+              "window_handle": "1668327862",
+              "bounds": {
+                "X": 22.0,
+                "Y": 512.0,
+                "Width": 674.0,
+                "Height": 408.0
+              },
+              "window_id": 69954
+            },
+            "observation_generation": 6
+          },
+          "capabilities": {
+            "backend": "desktop_ax",
+            "platform": "darwin",
+            "implemented": true,
+            "dependencies_present": true,
+            "dependency": "ApplicationServices",
+            "session_accessible": true,
+            "can_read_controls": true,
+            "supported_actions": [
+              "click",
+              "fill",
+              "press_key",
+              "scroll"
+            ],
+            "result_verification": true,
+            "foreground_input_required": "action_dependent",
+            "available": true,
+            "reason": null,
+            "verification_status": null,
+            "target": {
+              "pid": 82839,
+              "app": "Calculator",
+              "window_title": "Calculator",
+              "window_handle": "1668327862",
+              "bounds": {
+                "X": 22.0,
+                "Y": 512.0,
+                "Width": 674.0,
+                "Height": 408.0
+              },
+              "window_id": 69954
+            }
+          },
+          "empty_tree_reason": null,
+          "n_refs": 58,
+          "n_returned": 58,
+          "n_total": 58,
+          "n_interactive": 58,
+          "tree_truncated": false,
+          "text_dropped": 0,
+          "running_apps_count": 221,
+          "running_apps_preview": [],
+          "running_apps": null
+        },
+        "raw_tree": "window 'Calculator'\n            text '\\u200e7\\u200e+\\u200e3'\n            text '\\u200e10'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_0] button 'Open Parenthesis'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_1] button 'Close Parenthesis'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_2] button 'Clear Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_3] button 'Add to Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_4] button 'Subtract from Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_5] button 'Recall Memory'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_6] button 'Delete'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_7] button 'All Clear'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_8] button 'Percent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_9] button 'Divide'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_10] checkbox 'Secondary Functions' = '0'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_11] button 'X Squared'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_12] button 'X Cubed'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_13] button 'X to the Y'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_14] button 'e to the X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_15] button '10 to the X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_16] button '7'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_17] button '8'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_18] button '9'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_19] button 'Multiply'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_20] button '1 over x'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_21] button 'Square Root'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_22] button 'Cube Root'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_23] button 'Y root of X'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_24] button 'Natural Log'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_25] button 'Log Base 10'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_26] button '4'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_27] button '5'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_28] button '6'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_29] button 'Subtract'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_30] button 'X Factorial'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_31] button 'Sine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_32] button 'Cosine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_33] button 'Tangent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_34] button 'e'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_35] button 'Enter Exponent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_36] button '1'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_37] button '2'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_38] button '3'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_39] button 'Add'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_40] button 'Random Number'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_41] button 'Hyperbolic Sine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_42] button 'Hyperbolic Cosine'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_43] button 'Hyperbolic Tangent'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_44] button 'Pi'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_45] button 'Radians'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_46] button 'Change Sign'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_47] button '0'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_48] button 'Point'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_49] button 'Equals'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_50] button 'Show Sidebar'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_51] button 'Show Sidebar'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_52] button 'Mode'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_53] button 'Change Mode'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_54] button 'calculator.fill'\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_55] button\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_56] button\n  [desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_57] button",
+        "elapsed_ms": 81.91,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax"
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_16\"}}"
+      ],
+      "wall_ms": 171.88258294481784,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_16 (via AXPress=AXPress, UI change at 51.1ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 51.1,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 95.24,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_16"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_39\"}}"
+      ],
+      "wall_ms": 165.24279199074954,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_39 (via AXPress=AXPress, UI change at 53.5ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 53.5,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 87.41,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_39"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_38\"}}"
+      ],
+      "wall_ms": 166.74916597548872,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click ref=desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_38 (via AXPress=AXPress, UI change at 52.8ms; outcome unconfirmed)",
+        "data": {
+          "verification": {
+            "verified": "yes",
+            "signal": "button_press",
+            "matched_at_ms": 52.8,
+            "samples": 1,
+            "verify_diagnostics": {}
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "unknown",
+        "elapsed_ms": 87.49,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_38"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "act",
+        "{\"type\": \"click\", \"params\": {\"ref\": \"desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_49\", \"verify\": {\"kind\": \"text\", \"contains\": \"10\", \"timeout_ms\": 1500}}}"
+      ],
+      "wall_ms": 189.877292024903,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "layer": "desktop_ax",
+        "message": "click: requested postcondition confirmed",
+        "data": {
+          "verification": {
+            "verified": true,
+            "kind": "text",
+            "condition": {
+              "kind": "text",
+              "contains": "10",
+              "timeout_ms": 1500
+            },
+            "reason": "condition_matched"
+          },
+          "retry_safe": false,
+          "dispatched": true
+        },
+        "dispatch_state": "sent",
+        "outcome": "verified",
+        "elapsed_ms": 117.04,
+        "router_decision": {
+          "layer": "desktop_ax",
+          "reason": "macOS desktop target; keep AX scope and report missing permissions.",
+          "priority": 65,
+          "rule_name": "desktop_ax",
+          "alternatives": [
+            {
+              "rule": "canvas_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 100,
+              "reason": "Target sits on a <canvas>/WebGL surface; a11y tree is blind to it."
+            },
+            {
+              "rule": "visual_confirm",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 95,
+              "reason": "Action is in the critical list; force a visual confirmation pass."
+            },
+            {
+              "rule": "webmcp_tool",
+              "layer": "webmcp",
+              "matched": false,
+              "priority": 80,
+              "reason": "Site registered a tool via navigator.modelContext; prefer it."
+            },
+            {
+              "rule": "web_a11y",
+              "layer": "web_a11y",
+              "matched": false,
+              "priority": 70,
+              "reason": "Web context; a11y tree available — fastest path."
+            },
+            {
+              "rule": "desktop_registered",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 69,
+              "reason": "Use the explicitly registered platform backend; it reports its own capabilities."
+            },
+            {
+              "rule": "desktop_uia",
+              "layer": "desktop_uia",
+              "matched": false,
+              "priority": 68,
+              "reason": "Windows desktop target; use UIA semantic Patterns."
+            },
+            {
+              "rule": "desktop_linux_unimplemented",
+              "layer": "desktop_linux",
+              "matched": false,
+              "priority": 68,
+              "reason": "Linux desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_harmony_unimplemented",
+              "layer": "desktop_harmony",
+              "matched": false,
+              "priority": 68,
+              "reason": "HarmonyOS desktop backend is not implemented."
+            },
+            {
+              "rule": "desktop_explicit_appleevents",
+              "layer": "desktop_appleevents",
+              "matched": false,
+              "priority": 67,
+              "reason": "Keep the explicitly observed Apple Events target."
+            },
+            {
+              "rule": "desktop_webview_blind",
+              "layer": "desktop_ax",
+              "matched": false,
+              "priority": 66,
+              "reason": "Bound macOS target contains opaque web content; report its missing read capability."
+            },
+            {
+              "rule": "desktop_unsupported",
+              "layer": "desktop_unsupported",
+              "matched": true,
+              "priority": 54,
+              "reason": "No implemented desktop backend is registered for this platform."
+            },
+            {
+              "rule": "web_no_target",
+              "layer": "screenshot_fallback",
+              "matched": false,
+              "priority": 40,
+              "reason": "Web context but target ref not in a11y tree."
+            },
+            {
+              "rule": "default",
+              "layer": "screenshot_fallback",
+              "matched": true,
+              "priority": 10,
+              "reason": "No rule matched cleanly; fall back to screenshot + grounding."
+            }
+          ],
+          "features": {
+            "context": "desktop",
+            "platform": "darwin",
+            "desktop_backend": "desktop_ax",
+            "capabilities": {},
+            "n_elements": 0,
+            "n_interactive": 0,
+            "roles": {},
+            "has_canvas": false,
+            "has_web_area": false,
+            "has_web_app": false,
+            "has_webmcp": false,
+            "webmcp_tool_count": 0,
+            "webmcp_tool_names": [],
+            "has_screenshot": false,
+            "has_raw_tree": false,
+            "target_in_a11y": true,
+            "action_in_webmcp_tools": false,
+            "action_in_critical_list": false,
+            "needs_visual_confirm": false,
+            "has_canvas_target": false,
+            "observation_missing": true,
+            "action_type": "click",
+            "action_params": {
+              "ref": "desktop_ax:10ca99596d3f43f1a5acec07be4bea58:27574b1468d4041d92bd:obs_6:ref_49",
+              "verify": "{'kind': 'text', 'contains': '10', 'timeout_ms': 1500}"
+            }
+          }
+        },
+        "layer_used": "desktop_ax"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "session",
+        "end"
+      ],
+      "wall_ms": 175.0147909624502,
+      "rc": 0,
+      "result": {
+        "ok": true,
+        "active": false,
+        "daemon_stopped_pid": null
+      },
+      "stderr": ""
+    }
+  ]
+}

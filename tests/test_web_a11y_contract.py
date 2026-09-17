@@ -166,10 +166,12 @@ async def test_locator_strict_mode_is_classified_not_swallowed(monkeypatch):
     page.locator.return_value = loc
     layer = _layer(page, _fake_cdp())
     result = await layer._ref_action(page, "click", {"ref": "obs_5:ref_0"})
-    # Should fall back to coordinates (we have geometry) AND classify the reason.
-    assert result.ok is True
-    assert result.data["reason"] == "ambiguous"
-    assert result.data["coord_fallback"] is True
+    # The locator call may have sent an event: preserve uncertainty and stop.
+    assert result.ok is False
+    assert result.data["cause"] == "ambiguous"
+    assert result.dispatch_state == "unknown"
+    assert result.data["coord_fallback"] is False
+    page.mouse.click.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -189,7 +191,8 @@ async def test_locator_no_geometry_no_fallback(monkeypatch):
     layer._last_refs["obs_5:ref_0"]["cy"] = None
     result = await layer._ref_action(page, "click", {"ref": "obs_5:ref_0"})
     assert result.ok is False
-    assert result.data["reason"] == "timeout"
+    assert result.data["cause"] == "timeout"
+    assert result.data["reason"] == "outcome_unknown"
 
 
 # ---------------------------------------------------------------------------

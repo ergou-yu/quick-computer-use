@@ -128,8 +128,8 @@ def test_compact_drops_properties_and_keeps_required():
         name="Save",
         value=None,
         bounds=Rect(1, 2, 3, 4),
-        enabled=True,
-        focused=False,
+        enabled=False,
+        focused=True,
         properties={"description": "save", "raw_role": "AXButton", "depth": 3},
     )
     sliced, _ = apply_pagination_and_compact([rich], compact=True)
@@ -140,9 +140,10 @@ def test_compact_drops_properties_and_keeps_required():
     assert e.role == "button"
     assert e.name == "Save"
     assert e.bounds is not None
+    assert e.enabled is False
+    assert e.focused is True
     # Bulky fields are gone.
     assert e.properties == {} or e.properties is None
-    assert e.enabled is True  # default value, not the bulky explicit copy
 
 
 def test_compact_default_keeps_properties_intact():

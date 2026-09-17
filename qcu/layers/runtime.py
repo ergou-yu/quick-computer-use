@@ -29,7 +29,10 @@ def register(name: str) -> Any:
 
 
 def available() -> list[str]:
-    """Return names of all layers whose backend could be imported."""
+    """Return registered/importable adapters, NOT usable runtime capabilities.
+
+    Use capability_report() to distinguish implementation, dependency and access.
+    """
     out: list[str] = []
     for name in (
         "web_a11y",
@@ -38,6 +41,7 @@ def available() -> list[str]:
         "desktop_appleevents",
         "desktop_uia",
         "screenshot_fallback",
+        "desktop_linux", "desktop_harmony", "desktop_unsupported",
     ):
         try:
             cls = _REGISTRY.get(name)
@@ -62,6 +66,8 @@ def get_layer(name: str) -> Layer:
         if cls is None:
             raise RuntimeError(f"unknown or unloadable layer: {name}")
         inst = cls()
+        if getattr(inst, "name", None) == "desktop_unsupported":
+            inst.name = name
         _INSTANCES[name] = inst
         return inst
 
@@ -88,6 +94,9 @@ def _try_import(name: str) -> None:
         "desktop_appleevents": "qcu.layers.desktop_appleevents",
         "desktop_uia": "qcu.layers.desktop_uia",
         "screenshot_fallback": "qcu.layers.screenshot_fallback",
+        "desktop_linux": "qcu.layers.desktop_unsupported",
+        "desktop_harmony": "qcu.layers.desktop_unsupported",
+        "desktop_unsupported": "qcu.layers.desktop_unsupported",
     }.get(name)
     if modname is None:
         return
@@ -96,3 +105,12 @@ def _try_import(name: str) -> None:
     except Exception:
         # Leave it unregistered so the caller gets a clear "unknown layer" error.
         pass
+
+def capability_report() -> dict[str, Any]:
+    """Inspect desktop capability without claiming that imports imply access."""
+    from qcu.platforms import desktop_backend_name, desktop_capabilities
+    name = desktop_backend_name()
+    instance = _INSTANCES.get(name)
+    if instance is not None and hasattr(instance, "capabilities"):
+        return instance.capabilities()
+    return desktop_capabilities(layer=name)

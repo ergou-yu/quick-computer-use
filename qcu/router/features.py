@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from qcu.common.types import Action, Observation
+from qcu.platforms import platform_name, desktop_backend_name
 from qcu.common.normalize import INTERACTIVE_ROLES, NORMALIZED_ROLES
 
 
@@ -52,6 +53,10 @@ def extract(obs: Observation, *, last_action: Optional[Action] = None) -> dict[s
 
     feats: dict[str, Any] = {
         "context": obs.context,
+        "platform": platform_name(),
+        "desktop_backend": desktop_backend_name(),
+        "observed_layer": obs.routing_meta.get("layer"),
+        "capabilities": obs.routing_meta.get("capabilities", {}),
         "url_or_app": obs.url_or_app,
         "n_elements": n,
         "n_interactive": sum(

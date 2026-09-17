@@ -118,28 +118,28 @@ def test_act_rejects_unknown_action_type():
     assert "unsupported action type" in r.message
 
 
-def test_act_wait_sleeps_and_returns_ok():
+def test_act_wait_uses_read_only_contract():
     L = DesktopAppleEventsLayer()
     L._available = True
     r = L.act(Action(type="wait", params={"ms": 5}))
-    assert r.ok is True
-    assert "5ms" in r.message
+    assert r.ok is False
+    assert r.data["reason"] == "backend_read_only"
 
 
-def test_act_launch_app_requires_name():
+def test_act_launch_app_is_read_only():
     L = DesktopAppleEventsLayer()
     L._available = True
     r = L.act(Action(type="launch_app", params={}))
     assert r.ok is False
-    assert "app" in r.message
+    assert r.data["reason"] == "backend_read_only"
 
 
-def test_act_activate_app_requires_name():
+def test_act_activate_app_is_read_only():
     L = DesktopAppleEventsLayer()
     L._available = True
     r = L.act(Action(type="activate_app", params={}))
     assert r.ok is False
-    assert "app" in r.message
+    assert r.data["reason"] == "backend_read_only"
 
 
 def test_click_unknown_ref_rejected():
@@ -473,3 +473,22 @@ def test_probe_web_app_safari_real_dict_format(monkeypatch):
     assert meta["tabs"][0]["title"] == "Example Domain"
     assert "Safari" in hint
     assert "1 open tab" in hint
+
+
+@pytest.mark.parametrize("kind", ["click", "double_click", "fill", "type", "press_key", "scroll"])
+def test_public_appleevents_actions_cannot_use_legacy_refs(monkeypatch, kind):
+    layer = DesktopAppleEventsLayer()
+    layer._last_refs["ref_1"] = {"path": "w1.1", "cx": 10, "cy": 20}
+    monkeypatch.setattr(layer, "_run_snippet", lambda *a, **k: pytest.fail("must not dispatch"))
+    result = layer.act(Action(kind, {"ref": "ref_1", "x": 10, "y": 20, "text": "test"}))
+    assert result.dispatch_state == "not_sent"
+    assert result.data["reason"] == "backend_read_only"
+
+
+@pytest.mark.parametrize("scope", [{"pid": 123}, {"window": "Missing"}, {"window_id": 456}])
+def test_appleevents_unsupported_scope_is_not_ignored(monkeypatch, scope):
+    layer = DesktopAppleEventsLayer()
+    monkeypatch.setattr(layer, "is_available", lambda **k: pytest.fail("must reject before any UI probe"))
+    obs = layer.observe(**scope)
+    assert obs.routing_meta["reason"] == "unsupported_target_scope"
+    assert obs.elements == []

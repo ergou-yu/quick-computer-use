@@ -38,7 +38,7 @@ import io
 import json
 import socket
 import socketserver
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 
@@ -79,8 +79,14 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
             app=params.get("app"),
             pid=params.get("pid"),
             window=params.get("window"),
+            wait_until=params.get("wait_until", "domcontentloaded"),
+            wait_for=params.get("wait_for"),
+            timeout_ms=params.get("timeout_ms", 3000),
         ),
         "act": lambda: h.act(params.get("action", ""), layer=params.get("layer")),
+        "batch": lambda: h.batch(params.get("actions", ""), layer=params.get("layer"),
+                                  observe_after=params.get("observe_after", False),
+                                  compact=params.get("compact", False)),
         "route": lambda: h.route(params.get("features", "-")),
         "stats": lambda: h.stats(since=params.get("since", "7d"), path=params.get("path")),
         "schema": lambda: h.schema(params.get("what", "observation")),
@@ -94,13 +100,14 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": f"unknown method: {method!r}"}
 
     buf = io.StringIO()
+    err = io.StringIO()
     try:
         # Handlers print their JSON payload to stdout; capture it. The int they
         # return is the process exit code (0 ok, 1 user error, 2 action fail).
-        with contextlib.redirect_stdout(buf):
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
             rc = fn()
     except Exception as e:  # noqa: BLE001 — RPC boundary
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        return {"ok": False, "error": f"{type(e).__name__}: {e}", "stderr": err.getvalue()}
 
     out = buf.getvalue().strip()
     payload: Any = None
@@ -109,7 +116,7 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
             payload = json.loads(out)
         except json.JSONDecodeError:
             payload = {"raw": out}
-    return {"ok": True, "result": payload, "exit_code": rc}
+    return {"ok": True, "result": payload, "exit_code": rc, "stderr": err.getvalue()}
 
 
 def _daemon_status() -> int:
@@ -150,12 +157,19 @@ class _Handler(socketserver.BaseRequestHandler):
             return
         if raw is None:
             return  # client closed without sending; nothing to do.
-        method = raw.get("method")
-        params = raw.get("params") or {}
-        if not isinstance(method, str):
-            self._send({"ok": False, "error": "request must have a string 'method'"})
+        if not isinstance(raw, dict):
+            self._send({"ok": False, "error": "request must be an object"})
             return
-        response = _dispatch(method, params)
+        method = raw.get("method")
+        params = raw.get("params", {})
+        if not isinstance(method, str) or not isinstance(params, dict):
+            self._send({"ok": False, "error": "request needs a string method and object params"})
+            return
+        if method == "ping":
+            # Liveness must not call UI handlers or enter stdout redirection.
+            self._send({"ok": True})
+            return
+        response = self.server.worker.submit(_dispatch, method, params).result()
         self._send(response)
 
     # ------------------------------------------------------------------
@@ -164,14 +178,22 @@ class _Handler(socketserver.BaseRequestHandler):
 
     def _recv_json(self) -> Any:
         chunks: list[bytes] = []
+        size = 0
+        self.request.settimeout(5.0)
         while True:
-            chunk = self.request.recv(65536)
+            try:
+                chunk = self.request.recv(65536)
+            except OSError as exc:
+                raise _BadFrame(str(exc)) from exc
             if not chunk:
                 break
             chunks.append(chunk)
+            size += len(chunk)
+            if size > 4 * 1024 * 1024:
+                raise _BadFrame("request exceeds 4 MiB")
             if b"\n" in chunk:
                 break
-        data = b"".join(chunks).strip()
+        data = b"".join(chunks).split(b"\n", 1)[0].strip()
         if not data:
             return None
         try:
@@ -193,15 +215,23 @@ class _BadFrame(Exception):
 class _LoopbackTCPServer(socketserver.ThreadingTCPServer):
     """Serve the daemon on loopback only.
 
-    ThreadingTCPServer lets overlapping connections not block the readiness
-    probe (health check connects, then a real request connects). The handler
-    is still cheap and requests are effectively serial because the CLI sends
-    them one at a time; we keep threading only so the probe can't wedge a real
-    caller. ``allow_reuse_address`` lets a restarted daemon rebind its port.
+    Socket readers and ping can overlap; ALL UI handlers run on one persistent
+    worker. A lock alone is insufficient: backend handles also need thread
+    affinity. This keeps asyncio loops and stdout capture from racing.
     """
 
     allow_reuse_address = True
     daemon_threads = True
+
+    def __init__(self, *args, **kwargs):
+        self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="qcu-ui")
+        super().__init__(*args, **kwargs)
+
+    def server_close(self):
+        from qcu.layers.runtime import close_active
+        self.worker.submit(close_active).result()
+        self.worker.shutdown(wait=True)
+        super().server_close()
 
     def server_bind(self) -> None:
         # Force loopback — never expose the RPC endpoint beyond this machine.
@@ -228,13 +258,6 @@ def serve(port: int) -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        # Tear down any live layer instances on the way out. This is the ONLY
-        # place the daemon calls close() — never between requests — because
-        # WebA11yLayer._closed doesn't reset and reuse-after-close is broken.
-        with contextlib.suppress(Exception):
-            from qcu.layers.runtime import close_active
-
-            close_active()
         server.server_close()
 
 
@@ -251,10 +274,12 @@ def call_daemon(port: int, method: str, params: dict[str, Any] | None = None,
     Used by the thin CLI when it decides to route through the daemon.
     """
     request = json.dumps({"method": method, "params": params or {}}) + "\n"
+    dispatched = False
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             s.connect(("127.0.0.1", port))
+            dispatched = True  # sendall can partially send before raising
             s.sendall(request.encode("utf-8"))
             # Read until newline (response framing mirrors the request's).
             chunks: list[bytes] = []
@@ -267,21 +292,21 @@ def call_daemon(port: int, method: str, params: dict[str, Any] | None = None,
                     break
             data = b"".join(chunks).strip()
             if not data:
-                raise DaemonError("empty response from daemon")
+                raise DaemonError("empty response from daemon", dispatched=True)
             resp = json.loads(data.decode("utf-8"))
             if not isinstance(resp, dict):
-                raise DaemonError(f"non-object response: {resp!r}")
+                raise DaemonError(f"non-object response: {resp!r}", dispatched=True)
             return resp
     except DaemonError:
         raise
-    except (OSError, json.JSONDecodeError) as e:
-        raise DaemonError(f"daemon call failed: {type(e).__name__}: {e}") from e
+    except (OSError, ValueError) as e:
+        raise DaemonError(f"daemon call failed: {type(e).__name__}: {e}", dispatched=dispatched) from e
 
 
 def health_check(port: int, timeout: float = 2.0) -> bool:
-    """Cheap liveness probe — True if the daemon answers ``daemon_status``."""
+    """Cheap liveness probe independent of the UI worker and its stdout."""
     try:
-        resp = call_daemon(port, "daemon_status", {}, timeout=timeout)
+        resp = call_daemon(port, "ping", {}, timeout=timeout)
         return bool(resp.get("ok"))
     except DaemonError:
         return False
@@ -289,3 +314,7 @@ def health_check(port: int, timeout: float = 2.0) -> bool:
 
 class DaemonError(RuntimeError):
     """Raised when a daemon RPC fails at the transport level."""
+
+    def __init__(self, message: str, *, dispatched: bool = False):
+        super().__init__(message)
+        self.dispatched = dispatched

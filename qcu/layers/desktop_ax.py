@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from qcu.common.normalize import clean_text, from_ax, INTERACTIVE_ROLES, wait_ms as _wait_ms
 from qcu.common.types import Action, Element, LayerResult, Observation, Rect
+from qcu.common.refs import NativeRefRegistry
 from qcu.layers.base import Layer
 from qcu.layers.runtime import register
 
@@ -74,6 +75,19 @@ def _ax_get(fn, elem, attr):
         return fn(elem, attr, None)  # new 3-arg form
 
 
+def _ax_geometry(value: Any, *, size: bool = False) -> Any:
+    """Decode PyObjC AXValueRef geometry; test/provider structs also work."""
+    required = ("width", "height") if size else ("x", "y")
+    if all(hasattr(value, attr) for attr in required):
+        return value
+    try:
+        from ApplicationServices import AXValueGetValue, kAXValueCGPointType, kAXValueCGSizeType
+        ok, decoded = AXValueGetValue(value, kAXValueCGSizeType if size else kAXValueCGPointType, None)
+        return decoded if ok else None
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Blocker prefaces — shown in raw_tree when observe can't read the UI.
 #
@@ -117,6 +131,12 @@ class DesktopAXLayer(Layer):
         self._available = _check_pyobjc()
         self._cached_trusted: Optional[bool] = None
         self._last_refs: dict[str, dict[str, Any]] = {}
+        self._refs = NativeRefRegistry(self.name)
+        self._target_scope: dict[str, Any] = {}
+        self._target_window: Any = None
+        self._ref_error = ""
+        self._binding_error: Optional[str] = None
+        self._observed_control_count: Optional[int] = None
         # The app the user most recently launched/activated. Observed frontmost
         # detection (menuBarOwningApplication) reports the *caller's* app when
         # QCU runs in the background (e.g. from ZCode), so we prefer the
@@ -132,35 +152,16 @@ class DesktopAXLayer(Layer):
                 self._target_app = s.target_app
         except Exception:
             pass
-        # Restore cached refs from the session so a fresh CLI process can act
-        # on refs from a prior observe. Without this, every `qcu act` after an
-        # observe in a separate process sees an empty _last_refs and rejects
-        # every ref as "unknown".
+        # Native handles are process-local. Persist target identity for a later
+        # observation, but never reconstruct handles from a numeric path/name.
         try:
             from qcu.session import load as _load
-            s = _load()
-            if s and s.last_refs:
-                for entry in s.last_refs:
-                    ref = entry.get("ref")
-                    if not ref:
-                        continue
-                    b = entry.get("bounds")
-                    bounds = None
-                    if b:
-                        bounds = Rect(b["x"], b["y"], b["width"], b["height"])
-                    self._last_refs[ref] = {
-                        "cx": entry.get("cx"),
-                        "cy": entry.get("cy"),
-                        "role": entry.get("role"),
-                        "role_raw": entry.get("role_raw"),
-                        "subrole": entry.get("subrole"),
-                        "name": entry.get("name"),
-                        "path": entry.get("path"),
-                        "bounds": bounds,
-                        # ax_element is process-local; a fresh process must
-                        # re-resolve via _resolve_ax_element using the fingerprint.
-                        "ax_element": None,
-                    }
+            session = _load()
+            meta = ((session.last_observation or {}).get("routing_meta") or {}) if session else {}
+            if meta.get("layer") == self.name:
+                self._target_scope = dict(meta.get("target") or {})
+                if self._target_scope:
+                    self._binding_error = "target_requires_observe"
         except Exception:
             pass
 
@@ -195,6 +196,11 @@ class DesktopAXLayer(Layer):
     # ------------------------------------------------------------------
 
     def observe(self, max_depth: int = 8, **options: Any) -> Observation:
+        # Every observation attempt retires previous refs, including failed reads.
+        self._last_refs = {}
+        self._binding_error = "observation_not_completed"
+        self._observed_control_count = None
+        self._refs.begin(self._target_scope)
         if not self._available:
             return Observation(
                 context="desktop",
@@ -268,130 +274,79 @@ class DesktopAXLayer(Layer):
                 routing_meta={"layer": self.name, "error": f"AppKit unavailable: {e}"},
             )
         ws = NSWorkspace.sharedWorkspace()
-        front = None
-        # Priority 0: explicit --pid / --app scoping (highest precision). These
-        # were added because when QCU runs in the background the frontmost app
-        # drifts to the caller, so observe kept inspecting the wrong app. --pid
-        # is exact; --app matches by name (case-insensitive, .app stripped).
-        if options.get("pid"):
+        # Explicit identity never falls back to a different app/frontmost window.
+        supplied_app = options.get("app")
+        supplied_pid = options.get("pid")
+        if supplied_pid is not None:
             try:
-                for a in ws.runningApplications():
-                    if int(a.processIdentifier()) == int(options["pid"]):
-                        front = a
-                        break
-            except Exception:
-                front = None
-        if front is None and options.get("app"):
-            needle = str(options["app"]).lower().removesuffix(".app")
-            candidates = []
-            for a in ws.runningApplications():
-                n = (a.localizedName() or "").lower().removesuffix(".app")
-                if n == needle:
-                    candidates.append(a)
-            # Health-probe EVERY candidate (even a single one): in a long-lived
-            # daemon the NSWorkspace list can retain a stale proxy for a
-            # process that died and relaunched (observed: Calculator quit+
-            # reopen — the list still returned the DEAD pid, observe got 0
-            # elements, while a fresh process saw the new pid). A live windowed
-            # app always exposes ≥1 AXWindow; probe and take the first healthy.
-            from ApplicationServices import AXUIElementCreateApplication as _acf
-            for a in candidates:
-                try:
-                    perr, pwins = _ax_get(
-                        AXUIElementCopyAttributeValue,
-                        _acf(a.processIdentifier()), "AXWindows",
-                    )
-                    if perr == 0 and (pwins or []):
-                        front = a
-                        break
-                except Exception:
-                    continue
-            if front is None and candidates:
-                # No healthy NSWorkspace candidate: resolve the live pid from
-                # the Quartz window list — a window owned by the app proves
-                # both that the pid is alive and that it's the right process.
-                try:
-                    from Quartz import (CGWindowListCopyWindowInfo,
-                                        kCGWindowListOptionOnScreenOnly,
-                                        kCGNullWindowID)
-                    dead = {c.processIdentifier() for c in candidates}
-                    for w in CGWindowListCopyWindowInfo(
-                        kCGWindowListOptionOnScreenOnly, kCGNullWindowID
-                    ):
-                        owner = str(w.get("kCGWindowOwnerName") or "")
-                        p = w.get("kCGWindowOwnerPID")
-                        if (owner.lower().removesuffix(".app") == needle
-                                and p and int(p) not in dead):
-                            class _Shim:  # minimal duck-type for processIdentifier()
-                                def __init__(self, pid):
-                                    self._pid = int(pid)
-                                def processIdentifier(self):
-                                    return self._pid
-                                def localizedName(self):
-                                    return owner
-                            front = _Shim(p)
-                            break
-                except Exception:
-                    pass
-            if front is None and candidates:
-                front = candidates[-1]  # last resort: newest entry
-        # Priority 1: the explicitly-targeted app (set by launch_app/activate_app
-        # and persisted to session). This matters most when QCU runs in the
-        # background — menuBarOwningApplication then reports the CALLER (ZCode),
-        # not the app we just launched, so we'd observe the wrong tree.
-        if front is None and self._target_app:
-            needle = self._target_app.lower().removesuffix(".app")
-            for a in ws.runningApplications():
-                n = (a.localizedName() or "").lower().removesuffix(".app")
-                if n == needle and a.isActive():
-                    front = a
-                    break
-            if front is None:
-                # Fall back to the named app even if not active (still observable
-                # via AX — active-state only affects window focus for keyboard).
-                for a in ws.runningApplications():
-                    n = (a.localizedName() or "").lower().removesuffix(".app")
-                    if n == needle:
-                        front = a
-                        break
-        # Priority 2: the actually-active app.
-        if front is None:
-            front = ws.frontmostApplication()
-        if front is None:
-            return Observation(
-                context="desktop",
-                elements=[],
-                routing_meta={"layer": self.name, "error": "no frontmost application"},
+                if isinstance(supplied_pid, bool) or int(supplied_pid) <= 0:
+                    raise ValueError("pid must be positive")
+                supplied_pid = int(supplied_pid)
+            except (TypeError, ValueError):
+                return self._target_failure("invalid_target", "Explicit pid must be a positive integer.")
+        if supplied_app is not None and (not isinstance(supplied_app, str) or not supplied_app.strip()):
+            return self._target_failure("invalid_target", "Explicit app must be a nonempty string.")
+        if options.get("window") is not None and not str(options["window"]).strip():
+            return self._target_failure("invalid_target", "Explicit window must be a nonempty title filter.")
+        inherited = supplied_app is None and supplied_pid is None
+        wanted_pid = supplied_pid if supplied_pid is not None else (self._target_scope.get("pid") if inherited else None)
+        wanted_app = supplied_app or (None if wanted_pid else self._target_app)
+        apps = list(ws.runningApplications())
+        if wanted_pid:
+            candidates = [a for a in apps if int(a.processIdentifier()) == int(wanted_pid)]
+            if supplied_app:
+                candidates = [a for a in candidates if self._matches_app(str(supplied_app), a)]
+        elif wanted_app:
+            candidates = [a for a in apps if self._matches_app(str(wanted_app), a)]
+        else:
+            frontmost = ws.frontmostApplication()
+            candidates = [frontmost] if frontmost else []
+        if len(candidates) != 1:
+            return self._target_failure(
+                "app_not_found" if not candidates else "ambiguous_app",
+                "Target application is missing or ambiguous; specify a live --pid.",
+                [{"pid": int(a.processIdentifier()), "app": str(a.localizedName() or "")} for a in candidates],
             )
+        front = candidates[0]
         app = AXUIElementCreateApplication(front.processIdentifier())
-
-        # Stale-pid guard: in a long-lived daemon, NSWorkspace can hand back a
-        # cached NSRunningApplication for a pid whose process died and was
-        # relaunched (observed: Calculator quit + reopened; the daemon kept
-        # matching the NAME to the dead pid's proxy, AXWindows came back
-        # empty/errored, and observe returned 0 elements — while `observe
-        # --pid <new>` worked fine, proving the tree itself was healthy).
-        # Probe the resolved pid: if AXWindows yields nothing (empty OR error),
-        # re-resolve by name and take the entry with a DIFFERENT, live pid.
+        self._target_app = str(front.localizedName() or wanted_app or "")
+        prior_scope = self._target_scope
+        scope = {"pid": int(front.processIdentifier()), "app": self._target_app}
+        self._target_window = None
         try:
-            werr, wins_now = _ax_get(AXUIElementCopyAttributeValue, app, "AXWindows")
-            if werr != 0 or not (wins_now or []):
-                needle = (self._target_app or
-                          (options.get("app") or "")).lower().removesuffix(".app")
-                front_pid = front.processIdentifier()
-                fresh_pid = None
-                for a in ws.runningApplications():
-                    n = (a.localizedName() or "").lower().removesuffix(".app")
-                    if n and n == needle:
-                        p = a.processIdentifier()
-                        # Prefer a different pid (relaunch); same pid adds nothing.
-                        if p != front_pid:
-                            fresh_pid = p
-                            break
-                if fresh_pid is not None:
-                    app = AXUIElementCreateApplication(fresh_pid)
-        except Exception:
-            pass
+            werr, windows = _ax_get(AXUIElementCopyAttributeValue, app, "AXWindows")
+            if werr != 0:
+                return self._target_failure("target_inaccessible", "Cannot read target windows; this is not an empty UI.")
+            windows = list(windows or [])
+        except Exception as exc:
+            return self._target_failure("target_inaccessible", f"Cannot read target windows: {exc}")
+        window_candidates = []
+        for window in windows:
+            _, wt = _ax_get(AXUIElementCopyAttributeValue, window, "AXTitle")
+            window_candidates.append((window, self._window_identity(window, scope["pid"], str(wt or ""))))
+        win_filter = options.get("window")
+        if win_filter is not None:
+            matched = [(w, info) for w, info in window_candidates
+                       if str(win_filter).casefold() in info["window_title"].casefold()]
+        elif inherited and (prior_scope.get("window_id") is not None or prior_scope.get("window_handle")):
+            matched = [(w, info) for w, info in window_candidates
+                       if (info.get("window_id") == prior_scope["window_id"]
+                           if prior_scope.get("window_id") is not None else
+                           info.get("window_handle") == prior_scope.get("window_handle"))]
+        else:
+            matched = []
+        window_scoped = win_filter is not None or (inherited and bool(prior_scope.get("window_handle") or prior_scope.get("window_id")))
+        if window_scoped:
+            if len(matched) != 1:
+                return self._target_failure(
+                    "window_not_found" if not matched else "ambiguous_window",
+                    "Target window is missing or ambiguous; observe with a unique window title.",
+                    [info for _, info in (matched or window_candidates)],
+                )
+            self._target_window, window_info = matched[0]
+            scope.update(window_info)
+        self._target_scope = scope
+        self._refs.begin(scope)
 
         title = ""
         try:
@@ -425,16 +380,20 @@ class DesktopAXLayer(Layer):
         # target app's content is an opaque web view, the AX tree exposes only
         # the outer shell — the DOM is unreachable (the field-report gap:
         # "Mirroria 的 WKWebView 没有向 AX 暴露内部 DOM"). Surfacing this lets
-        # the LLM escalate to T3 web takeover (session start --context web +
-        # navigate) instead of staring at an empty tree. We do NOT attempt to
-        # recover a URL (most WKWebView apps expose no scriptable tab model);
-        # the hint is honest about that.
+        # caller understands which native provider exposed these controls.
+        # It cannot establish a browser tab identity or authorize a new target.
         found_web_area: bool = False
+        visited: set[int] = set()
+        node_limit = max(1, min(int(options.get("max_nodes", 2000)), 10000))
 
         def walk(elem: Any, depth: int, path: list[int]) -> None:
-            nonlocal counter
-            if max_depth > 0 and depth > max_depth:
+            nonlocal counter, found_web_area
+            if depth > (max_depth if max_depth > 0 else 64) or len(visited) >= node_limit:
                 return
+            identity = hash(elem)
+            if identity in visited:
+                return
+            visited.add(identity)
             # Query ROLE first — it's the cheapest discriminator. Most nodes
             # are layout containers (AXGroup/AXLayoutArea) we don't care about;
             # checking role first lets us skip the expensive name/value/pos/
@@ -455,6 +414,16 @@ class DesktopAXLayer(Layer):
             except Exception:
                 name_err, name = -1, None
             name_s = clean_text(str(name)) if name_err == 0 and name else ""
+            # AXStaticText (including Calculator's result) often has no title;
+            # its visible text lives in AXValue. Read only informational roles,
+            # keeping the fast path for anonymous layout containers intact.
+            if not name_s and role_norm in {"text", "heading", "cell"}:
+                try:
+                    text_err, text_value = _ax_get(AXUIElementCopyAttributeValue, elem, "AXValue")
+                    if text_err == 0 and text_value is not None:
+                        name_s = clean_text(text_value, max_len=1000)
+                except Exception:
+                    pass
 
             if role_norm in INTERACTIVE_ROLES:
                 # Full attribute fetch only for actable elements (the minority).
@@ -486,8 +455,7 @@ class DesktopAXLayer(Layer):
                     focused_val = None
                 focused = bool(focused_val) if focused_val is not None else False
                 # Subrole lets us distinguish AXSearchField / AXList / etc. and
-                # is part of the ref's "AX fingerprint" used by act to relocate
-                # the element in a fresh process.
+                # remains useful native metadata; it is never a relocation key.
                 try:
                     _, subrole = _ax_get(AXUIElementCopyAttributeValue, elem, "AXSubrole")
                 except Exception:
@@ -512,11 +480,13 @@ class DesktopAXLayer(Layer):
                         desc_err, desc = -1, None
                     if desc_err == 0 and desc:
                         name_s = clean_text(str(desc))
-                value_s = clean_text(str(value), max_len=1000) if value_err == 0 and value else ""
+                value_s = clean_text(value, max_len=1000) if value_err == 0 and value is not None else ""
 
                 bounds: Optional[Rect] = None
                 cx: Optional[float] = None
                 cy: Optional[float] = None
+                pos = _ax_geometry(pos)
+                size = _ax_geometry(size, size=True)
                 if pos_err == 0 and size_err == 0 and pos is not None and size is not None:
                     try:
                         x = float(getattr(pos, "x", 0))
@@ -530,7 +500,7 @@ class DesktopAXLayer(Layer):
                     except Exception:
                         pass
 
-                ref = f"ref_{counter}"
+                ref = self._refs.issue(counter)
                 counter += 1
                 el = Element(
                     ref=ref,
@@ -554,9 +524,10 @@ class DesktopAXLayer(Layer):
                     "bounds": bounds,
                     "path": list(path),
                     # In-process AXUIElement handle — can't be serialized to
-                    # session.json, so patch() (which drops it via JSON) keeps
-                    # only the rest as the cross-process fingerprint.
+                    # session.json. A new backend must observe again.
                     "ax_element": elem,
+                    "target": dict(self._target_scope),
+                    "ax_window": self._element_window(elem),
                 }
                 indent = "  " * depth
                 line = f"{indent}[{ref}] {role_norm}"
@@ -584,61 +555,17 @@ class DesktopAXLayer(Layer):
                 for idx, k in enumerate(kids):
                     walk(k, depth + 1, path + [idx])
 
-        # Walk the target tree. Two modes:
-        # 1. --window <substring>: walk ONLY the AXWindow(s) whose title
-        #    contains the substring. This drops the menu bar + every other
-        #    window's controls, which is the difference between 300 elements
-        #    and 30 when an app has many panels. Falls back to mode 2 if no
-        #    window matches (so --window is never a hard failure).
-        # 2. default: walk from the app root. (We tried window-first, but
-        #    Notes' AX tree is self-referencing — AXWindows[0]/AXFocusedWindow
-        #    both return an AXApplication role, not an AXWindow — so starting
-        #    from the app root with a generous depth actually reaches the
-        #    window content too.)
-        walked_roots: list[Any] = []
-        win_filter = options.get("window")
-        if win_filter:
-            needle_w = str(win_filter).lower()
-            try:
-                _, wins = _ax_get(AXUIElementCopyAttributeValue, app, "AXWindows")
-                for w in (wins or []):
-                    try:
-                        _, wt = _ax_get(AXUIElementCopyAttributeValue, w, "AXTitle")
-                        if wt and needle_w in str(wt).lower():
-                            walked_roots.append(w)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-        if walked_roots:
-            for w in walked_roots:
-                walk(w, 0, [])
-        else:
-            walk(app, 0, [])
+        # One explicit window means one traversal root. Never widen on a miss.
+        walk(self._target_window if self._target_window is not None else app, 0, [])
         self._last_refs = new_refs
-
-        # Persist refs to the session so a fresh CLI process can act on them
-        # without re-observing first. Mirrors how web_a11y does it — without
-        # this, every `qcu act` after an observe in a separate process fails
-        # with "unknown ref" because _last_refs starts empty.
+        self._binding_error = None
+        self._observed_control_count = len(elements)
         try:
             from qcu.session import patch
-            serialized = []
-            for ref, info in new_refs.items():
-                b = info.get("bounds")
-                serialized.append({
-                    "ref": ref,
-                    "cx": info.get("cx"),
-                    "cy": info.get("cy"),
-                    "role": info.get("role"),
-                    "role_raw": info.get("role_raw"),
-                    "subrole": info.get("subrole"),
-                    "name": info.get("name"),
-                    "path": info.get("path"),
-                    "bounds": ({"x": b.x, "y": b.y, "width": b.width, "height": b.height}
-                               if b is not None else None),
-                })
-            patch(last_refs=serialized)
+            patch(target_app=self._target_app, last_refs=[
+                {"ref": ref, "role": info["role"], "name": info["name"],
+                 "target": info["target"]} for ref, info in new_refs.items()
+            ])
         except Exception:
             pass
 
@@ -662,29 +589,17 @@ class DesktopAXLayer(Layer):
         # Prepend a small header block so the LLM sees switchable apps right
         # away, alongside the focused app's tree.
         header: list[str] = []
-        if running_apps:
+        if running_apps and not any(options.get(k) for k in ("compact", "app", "pid", "window")):
             preview = ", ".join(running_apps[:40])
             header.append(f"# running apps ({len(running_apps)}): {preview}")
             header.append("# use activate_app or launch_app to switch target")
             header.append("")
         tree_text = "\n".join(header + raw_lines) if raw_lines else ("\n".join(header) or None)
 
-        # Web-app awareness (shared with desktop_appleevents): when the target
-        # is Chrome / Safari / Edge, Chrome's AX tree shows only the chrome —
-        # the DOM is opaque unless Google's "Allow JS from Apple Events" and
-        # ``AXManualAccessibility`` are both flipped (we can't do that
-        # programmatically without AX trust on our process). We probe the
-        # browser's native scripting dictionary for tab URL + title so the
-        # LLM at least knows WHAT page is open and can navigate QCU's own
-        # headless Chromium there to actually interact with the DOM.
+        # A native AX observation remains bound to its app/window. Browser tab
+        # metadata from a second transport cannot identify this AX target.
         web_app_meta: Optional[dict[str, Any]] = None
         web_app_hint = ""
-        try:
-            from qcu.layers.desktop_appleevents import _probe_web_app
-
-            web_app_meta, web_app_hint = _probe_web_app(self._target_app)
-        except Exception:
-            pass
 
         # Pagination + filter + compact, mirroring desktop_appleevents and
         # web_a11y. Without this, a Chrome/Safari window dumps all 400+
@@ -708,13 +623,12 @@ class DesktopAXLayer(Layer):
         # lines (window title etc.) are pulled in from the original raw_lines
         # for the first few so the LLM has *some* framing.
         ui_lines: list[str] = list(header)
-        # Reuse up to the first 6 context lines from raw_lines (window labels,
-        # group names) if they exist — these don't survive pagination.
-        for ctx in raw_lines[:6]:
-            if ctx and not ctx.lstrip().startswith("["):
-                ui_lines.append(ctx)
-                if len([u for u in ui_lines if not u.startswith("  [")]) >= 8:
-                    break
+        # Keep bounded informational text wherever it occurs in the tree;
+        # limiting this to the first six raw lines lost result/status labels.
+        context_lines = [line for line in raw_lines if line and not line.lstrip().startswith("[")]
+        context_limit = max(0, int(options.get("text_limit", 80)))
+        visible_context = context_lines if options.get("full_text") else context_lines[:context_limit]
+        ui_lines.extend(visible_context)
         for e in sliced:
             ln = f"  [{e.ref}] {e.role}"
             if e.name:
@@ -736,68 +650,12 @@ class DesktopAXLayer(Layer):
             hint_lines = web_app_hint.splitlines() if web_app_hint else []
             tree_text = "\n".join(hint_lines + ["", "# --- AX UI tree (browser chrome only) ---", tree_text]) if tree_text else web_app_hint
 
-        # Embedded web view (WKWebView/Electron): the AX tree is the outer
-        # shell only — the DOM is opaque. Surface a structured hint so the
-        # LLM can escalate to the QCU Chromium daemon. We deliberately set
-        # ``url=None``: most WKWebView apps expose no scriptable tab model,
-        # so we can't auto-recover the page URL and won't pretend to. The
-        # raw_tree preface is the action a caller should take.
         web_view_meta: Optional[dict[str, Any]] = None
         if found_web_area:
-            app_name_for_hint = self._target_app or title or None
-            web_view_meta = {
-                "app": app_name_for_hint,
-                "url": None,
-                "reason": (
-                    "AXWebArea detected: the app embeds an opaque web view "
-                    "(WKWebView/Electron) whose DOM AX cannot reach. To act on "
-                    "page content, end this session and restart in web context: "
-                    "`qcu session end && qcu session start --context web && "
-                    "qcu act '{\"type\":\"navigate\",\"params\":{\"url\":\"<the page URL>\"}}'`."
-                ),
-            }
-            wv_preface = (
-                f"# ⚠ 检测到内嵌 web view（AXWebArea）— DOM 对 AX 不可见。\n"
-                f"# 要操作页面内容：结束当前会话，用 web context 启动 QCU 自带的 Chromium：\n"
-                f"#   qcu session end  →  qcu session start --context web  →  navigate <url>\n"
-                f"# （QCU 无法自动获取该 web view 的 URL；需要你提供。）"
-            )
-            tree_text = (wv_preface + "\n\n" + tree_text) if tree_text else wv_preface
-
-        # Full browser (Chrome/Safari/Edge/Arc) detected via AppleScript tab
-        # probing. Stock Chrome does NOT expose AXWebArea without
-        # AXManualAccessibility, so the AXWebArea branch above never fires for
-        # it — yet its DOM is just as opaque. Mirror the structured web_view
-        # flag here so the router's has_web_area (and the new has_web_app)
-        # both trip and the T3 takeover hint reaches the agent through every
-        # channel: routing_meta.web_view, router reason, AND a stderr line.
-        # Field report: "CRM 网页 DOM 对 QCU 不可见" — the soft raw_tree
-        # comment alone was being ignored.
-        elif web_app_meta is not None:
-            browser_name = web_app_meta.get("browser") or self._target_app or title or None
-            first_tab_url = None
-            tabs = web_app_meta.get("tabs") or []
-            if tabs and isinstance(tabs[0], dict):
-                first_tab_url = tabs[0].get("url")
-            web_view_meta = {
-                "app": browser_name,
-                "url": first_tab_url,
-                "reason": (
-                    f"Frontmost app is a browser ({browser_name}) detected via "
-                    "AppleScript tab probing; its web DOM is opaque to AX. To act "
-                    "on page content, end this session and restart in web context, "
-                    "navigating QCU's own Chromium to the same URL: "
-                    "`qcu session end && qcu session start --context web && "
-                    "qcu act '{\"type\":\"navigate\",\"params\":{\"url\":\"<url>\"}}'`."
-                ),
-            }
-            import sys as _sys
-            print(
-                f"[qcu] 前台是浏览器 {browser_name!r}：DOM 对 AX 不透明，"
-                f"建议 `qcu session end && qcu session start --context web` 后 "
-                f"navigate 到同一 URL（如 {first_tab_url!r}）。",
-                file=_sys.stderr,
-            )
+            web_view_meta = {"app": self._target_app, "url": None,
+                             "reason": "AXWebArea observed; only the controls actually exposed by this target are available. Browser tab identity is not established by AX."}
+            tree_text = ("# Embedded web view: inspect the returned controls and target capabilities; "
+                         "keep this app/window bound.\n" + (tree_text or ""))
 
         return Observation(
             context="desktop",
@@ -807,11 +665,16 @@ class DesktopAXLayer(Layer):
             routing_meta={
                 "layer": self.name,
                 "trusted": True,
+                "target": dict(self._target_scope),
+                "ref_scope": self._refs.scope,
+                "capabilities": self.capabilities(),
+                "empty_tree_reason": None if elements else "no_controls_observed; provider may be incomplete or inaccessible",
                 "n_refs": len(elements),  # total in this observation
                 "n_returned": page_meta["n_returned"],
                 "n_total": page_meta["n_total"],
                 "n_interactive": page_meta["n_interactive"],
                 "tree_truncated": page_meta["tree_truncated"],
+                "text_dropped": len(context_lines)-len(visible_context),
                 # ``running_apps`` was unconditionally emitting ~250 process
                 # names (~3-4KB) into the JSON even under ``--compact``,
                 # drowning the high-signal ``web_app`` probe. We now keep the
@@ -819,7 +682,7 @@ class DesktopAXLayer(Layer):
                 # ``running_apps_full`` unless compact wants the tightest
                 # payload.
                 "running_apps_count": len(running_apps),
-                "running_apps_preview": running_apps[:30],
+                "running_apps_preview": [] if options.get("compact") else running_apps[:30],
                 "running_apps": running_apps_full_for_payload(running_apps, compact=bool(options.get("compact", False))),
                 **({"web_app": web_app_meta} if web_app_meta is not None else {}),
                 **({"web_view": web_view_meta} if web_view_meta is not None else {}),
@@ -833,6 +696,131 @@ class DesktopAXLayer(Layer):
     # ------------------------------------------------------------------
 
     def act(self, action: Action) -> LayerResult:
+        params = action.params or {}
+        condition = params.get("verify")
+        if condition is not None:
+            from qcu.common.verification import validate_condition
+            try:
+                validate_condition(condition)
+            except ValueError as error:
+                return LayerResult(ok=False, layer=self.name, message=str(error),
+                                   data={"reason": "invalid_verification"}, dispatch_state="not_sent")
+        for key in ("ref", "ref_from", "ref_to"):
+            ref = params.get(key)
+            if isinstance(ref, str) and self._resolve_ax_element(ref) is None:
+                return self._invalid_ref_result(ref)
+        if isinstance(condition, dict) and condition.get("ref"):
+            if self._resolve_ax_element(condition["ref"], for_action=False) is None:
+                return self._invalid_ref_result(condition["ref"])
+        # Explicit action options cannot reinterpret an already-observed target.
+        for key in ("pid", "app"):
+            if action.type not in {"launch_app", "activate_app"} and key in params and self._target_scope.get(key) is not None:
+                if str(params[key]).casefold() != str(self._target_scope[key]).casefold():
+                    return LayerResult(ok=False, layer=self.name, message="Action target differs from observed target; observe again.",
+                                       data={"reason": "target_mismatch"}, dispatch_state="not_sent")
+        if action.type not in {"launch_app", "activate_app"}:
+            window_id = params.get("window_id")
+            window = params.get("window")
+            mismatch = False
+            if window_id is not None:
+                try:
+                    mismatch = int(window_id) != self._target_scope.get("window_id")
+                except (TypeError, ValueError):
+                    mismatch = True
+            if window is not None:
+                mismatch = mismatch or not str(window).strip() or not self._target_scope.get("window_title") or str(window).casefold() not in self._target_scope["window_title"].casefold()
+            if mismatch:
+                return LayerResult(ok=False, layer=self.name, message="Action window differs from the observed window; observe the requested window first.",
+                                   data={"reason": "target_mismatch"}, dispatch_state="not_sent")
+        if action.type in {"type", "press_key", "scroll", "go_back", "go_forward"}:
+            denied = self._check_foreground_target()
+            if denied is not None:
+                return denied
+        result = self._act(action)
+        if condition is not None and result.dispatch_state != "not_sent":
+            verification = self._verify_condition(condition)
+            result.data["verification"] = verification
+            result.outcome = "verified" if verification.get("verified") else "unknown"
+            result.ok = bool(verification.get("verified"))
+            if result.ok:
+                result.data.pop("reason", None)
+                result.message = f"{action.type}: requested postcondition confirmed"
+            else:
+                result.data.update(reason="outcome_unknown", retry_safe=False)
+                result.message = f"{action.type}: dispatched; requested postcondition unconfirmed"
+        return result
+
+    def _check_foreground_target(self) -> Optional[LayerResult]:
+        if not self._target_scope or self._binding_error:
+            return LayerResult(ok=False, layer=self.name, message="Foreground input requires an observed target.",
+                               data={"reason": "target_unbound"}, dispatch_state="not_sent")
+        try:
+            from AppKit import NSWorkspace
+            from ApplicationServices import AXUIElementCreateApplication, AXUIElementCopyAttributeValue
+            current = NSWorkspace.sharedWorkspace().frontmostApplication()
+            valid = current is not None and int(current.processIdentifier()) == self._target_scope.get("pid")
+            if valid and self._target_window is not None:
+                err, focused = _ax_get(AXUIElementCopyAttributeValue,
+                                      AXUIElementCreateApplication(int(current.processIdentifier())), "AXFocusedWindow")
+                valid = err == 0 and focused == self._target_window
+            if valid:
+                return None
+        except Exception:
+            pass
+        return LayerResult(ok=False, layer=self.name, message="Foreground input target cannot be confirmed; no event sent.",
+                           data={"reason": "foreground_target_unconfirmed"}, dispatch_state="not_sent")
+
+    def _verify_condition(self, condition: dict[str, Any]) -> dict[str, Any]:
+        from qcu.common.verification import match_condition
+        deadline = time.monotonic() + min(max(float(condition.get("timeout_ms", 1000)), 0), 10000) / 1000
+        while True:
+            result = match_condition(condition, self._verification_elements(condition))
+            if result.get("verified") or time.monotonic() >= deadline:
+                return result
+            time.sleep(0.05)
+
+    def _verification_elements(self, condition: dict[str, Any]) -> list[Element]:
+        """Read the same scope without issuing refs or replacing the action cache."""
+        try:
+            from ApplicationServices import AXUIElementCopyAttributeValue, AXUIElementCreateApplication
+            ref = condition.get("ref")
+            if ref:
+                root = self._resolve_ax_element(ref, for_action=False)
+                if root is None:
+                    return []
+            else:
+                root = self._target_window
+                if root is None and self._target_scope.get("pid"):
+                    root = AXUIElementCreateApplication(self._target_scope["pid"])
+            if root is None:
+                return []
+            pending, elements, visited = [(root, 0)], [], set()
+            while pending and len(visited) < 500:
+                element, depth = pending.pop()
+                identity = hash(element)
+                if identity in visited or depth > 12:
+                    continue
+                visited.add(identity)
+                def get(attr):
+                    err, value = _ax_get(AXUIElementCopyAttributeValue, element, attr)
+                    return value if err == 0 else None
+                role = get("AXRole")
+                if not role:
+                    continue
+                value = get("AXValue")
+                name = get("AXTitle") or get("AXDescription")
+                normalized = from_ax(str(role))
+                elements.append(Element(ref=ref or "", role=normalized,
+                    name=str(name or ""), value=str(value) if value is not None else None,
+                    properties={"checked": bool(value) if normalized in {"checkbox", "switch", "radio"} and value is not None else None,
+                                "selected": get("AXSelected")}))
+                if not ref:
+                    pending.extend((child, depth+1) for child in get("AXChildren") or [])
+            return elements
+        except Exception:
+            return []
+
+    def _act(self, action: Action) -> LayerResult:
         if not self._available:
             return LayerResult(ok=False, layer=self.name, message="PyObjC not installed")
         # launch_app uses `open -a`, which does NOT need the Accessibility
@@ -895,6 +883,7 @@ class DesktopAXLayer(Layer):
                 ok=r.ok,
                 layer=self.name,
                 message=(f"{atype} (via {combo})" if r.ok else f"{atype} failed: {r.message}"),
+                data=dict(r.data), dispatch_state=r.dispatch_state, outcome=r.outcome,
             )
         return LayerResult(ok=False, layer=self.name, message=f"unsupported action type: {atype}")
 
@@ -902,113 +891,144 @@ class DesktopAXLayer(Layer):
     # AX-native element resolution + actions (no coordinates, no screenshot)
     # ------------------------------------------------------------------
 
-    def _resolve_ax_element(self, ref: str) -> Optional[Any]:
-        """Resolve a ref back to a live AXUIElement in THIS process.
-
-        Priority:
-        1. In-process handle cached during observe (fast path).
-        2. Re-locate via the stored fingerprint (role/name/subrole/path) by
-           walking the frontmost app's tree again. Slower but works across
-           CLI process boundaries where the AXUIElement can't be serialized.
-        3. None → caller falls back to coordinate input.
-
-        This is what lets QCU act via AX-native APIs (AXPress / AXSetAttributeValue)
-        instead of always dropping to CGEvent coordinate clicks.
-        """
-        cached = self._last_refs.get(ref)
-        if cached is None:
-            return None
-        # Fast path: same process as the observe that created this ref.
-        elem = cached.get("ax_element")
-        if elem is not None:
-            return elem
-
-        # Slow path: re-walk to find the matching element by fingerprint.
-        try:
-            from ApplicationServices import (
-                AXUIElementCreateApplication, AXUIElementCopyAttributeValue,
-            )
-            from AppKit import NSWorkspace  # type: ignore
-            ws = NSWorkspace.sharedWorkspace()
-            front = None
-            # Same target-app-first logic as observe(): when QCU runs in the
-            # background, frontmost/menuBar report the caller, not the target.
-            if self._target_app:
-                needle = self._target_app.lower().removesuffix(".app")
-                for a in ws.runningApplications():
-                    n = (a.localizedName() or "").lower().removesuffix(".app")
-                    if n == needle:
-                        front = a
-                        break
-            if front is None:
-                front = ws.frontmostApplication()
-            if front is None:
-                return None
-            app_elem = AXUIElementCreateApplication(front.processIdentifier())
-            # Prefer AXWindows (matches observe's new window-first walk);
-            # AXMainWindow is unreliable on WebKit apps (returns the app root).
-            wins: Optional[list] = None
+    def capabilities(self) -> dict[str, Any]:
+        from qcu.platforms import desktop_capabilities
+        report = desktop_capabilities(layer=self.name)
+        trusted = self.is_trusted(prompt=False) if self._available else False
+        accessible = False
+        reason = "target_unbound"
+        if not self._available:
+            reason = "PyObjC ApplicationServices/Quartz not installed"
+        elif not trusted:
+            reason = "Accessibility permission not granted"
+        elif self._binding_error:
+            reason = self._binding_error
+        elif self._target_scope.get("pid"):
             try:
-                werr, wins = _ax_get(AXUIElementCopyAttributeValue, app_elem, "AXWindows")
+                from ApplicationServices import AXUIElementCreateApplication, AXUIElementCopyAttributeValue
+                root = self._target_window if self._target_window is not None else AXUIElementCreateApplication(self._target_scope["pid"])
+                err, role = _ax_get(AXUIElementCopyAttributeValue, root, "AXRole")
+                err2, children = _ax_get(AXUIElementCopyAttributeValue, root, "AXChildren")
+                accessible = err == 0 and bool(role) and err2 == 0
+                reason = None if accessible else "target_access_probe_failed"
             except Exception:
-                werr, wins = -1, None
-            if werr != 0 or not wins:
-                return None
-            win = wins[0]
-            # Walk with a matcher: prefer path (exact position), fall back to
-            # (role, name, subrole) tuple match if the tree shifted.
-            target_role_raw = cached.get("role_raw")
-            target_name = cached.get("name")
-            target_subrole = cached.get("subrole")
-            target_path = cached.get("path") or []
+                reason = "target_access_probe_failed"
+        can_read = bool(self._observed_control_count) if accessible else False
+        if accessible and not self._observed_control_count:
+            can_read = None
+            reason = "empty_or_unexposed_tree" if self._observed_control_count == 0 else "target_not_observed"
+        report.update(dependencies_present=self._available, session_accessible=accessible,
+                      can_read_controls=can_read, available=accessible and can_read is True, reason=reason,
+                      target=dict(self._target_scope))
+        return report
 
-            def by_path(node: Any, path: list[int]) -> Optional[Any]:
-                if not path:
-                    return node
-                try:
-                    _, kids = _ax_get(AXUIElementCopyAttributeValue, node, "AXChildren")
-                except Exception:
-                    kids = None
-                if not kids:
-                    return None
-                idx = path[0]
-                if idx >= len(kids):
-                    return None
-                return by_path(kids[idx], path[1:])
+    def _target_failure(self, reason: str, message: str, candidates=None) -> Observation:
+        self._binding_error = reason
+        return Observation(context="desktop", elements=[], raw_tree=f"# {message}",
+                           routing_meta={"layer": self.name, "error": message, "reason": reason,
+                                         "target": dict(self._target_scope), "candidates": candidates or []})
 
-            def by_fingerprint(node: Any, depth: int) -> Optional[Any]:
-                if depth > 16:
-                    return None
-                try:
-                    er, role = _ax_get(AXUIElementCopyAttributeValue, node, "AXRole")
-                    en, name = _ax_get(AXUIElementCopyAttributeValue, node, "AXTitle")
-                    es, sub = _ax_get(AXUIElementCopyAttributeValue, node, "AXSubrole")
-                except Exception:
-                    return None
-                if (role == target_role_raw
-                        and clean_text(str(name)) == (target_name or "")
-                        and (sub or None) == (target_subrole or None)):
-                    return node
-                try:
-                    _, kids = _ax_get(AXUIElementCopyAttributeValue, node, "AXChildren")
-                except Exception:
-                    kids = None
-                if kids:
-                    for k in kids:
-                        hit = by_fingerprint(k, depth + 1)
-                        if hit is not None:
-                            return hit
-                return None
-
-            found = by_path(win, target_path) if target_path else None
-            if found is None:
-                found = by_fingerprint(win, 0)
-            # Cache for repeat use within this process.
-            if found is not None:
-                cached["ax_element"] = found
-            return found
+    @staticmethod
+    def _element_window(elem: Any) -> Any:
+        try:
+            from ApplicationServices import AXUIElementCopyAttributeValue
+            err, win = _ax_get(AXUIElementCopyAttributeValue, elem, "AXWindow")
+            return win if err == 0 else None
         except Exception:
             return None
+
+    @staticmethod
+    def _window_identity(window: Any, pid: int, title: str) -> dict[str, Any]:
+        info: dict[str, Any] = {"window_title": title, "window_handle": str(hash(window))}
+        try:
+            from ApplicationServices import AXUIElementCopyAttributeValue
+            title_error, current_title = _ax_get(AXUIElementCopyAttributeValue, window, "AXTitle")
+            if title_error == 0 and current_title is not None:
+                title = str(current_title)
+                info["window_title"] = title
+            err, wid = _ax_get(AXUIElementCopyAttributeValue, window, "AXWindowNumber")
+            if err == 0 and wid:
+                info["window_id"] = int(wid)
+        except Exception:
+            pass
+        try:
+            from ApplicationServices import AXUIElementCopyAttributeValue
+            _, raw_pos = _ax_get(AXUIElementCopyAttributeValue, window, "AXPosition")
+            _, raw_size = _ax_get(AXUIElementCopyAttributeValue, window, "AXSize")
+            pos, size = _ax_geometry(raw_pos), _ax_geometry(raw_size, size=True)
+            if pos is not None and size is not None and size.width > 0 and size.height > 0:
+                info["bounds"] = {"X": float(pos.x), "Y": float(pos.y),
+                                  "Width": float(size.width), "Height": float(size.height)}
+        except Exception:
+            pass
+        if not info.get("window_id"):
+            try:
+                from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionOnScreenOnly, kCGNullWindowID
+                matches = []
+                for candidate in CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID):
+                    if int(candidate.get("kCGWindowOwnerPID") or 0) != pid:
+                        continue
+                    candidate_title = str(candidate.get("kCGWindowName") or "")
+                    candidate_bounds = dict(candidate.get("kCGWindowBounds") or {})
+                    if info.get("bounds"):
+                        # Screen Recording denial can redact CG titles; unique
+                        # exact AX/CG bounds within one pid still identify a window.
+                        if candidate_bounds != info["bounds"] or (candidate_title and candidate_title != title):
+                            continue
+                    elif not title or candidate_title != title:
+                        continue
+                    matches.append(candidate)
+                if len(matches) == 1:
+                    info["window_id"] = int(matches[0]["kCGWindowNumber"])
+            except Exception:
+                pass
+        return info
+
+    def _resolve_ax_element(self, ref: str, *, for_action: bool = True) -> Optional[Any]:
+        """Validate the exact live handle; never relocate an expired native ref."""
+        valid, reason = self._refs.validate(ref, self._target_scope)
+        self._ref_error = reason
+        if not valid:
+            return None
+        cached = self._last_refs.get(ref)
+        if not cached or cached.get("ax_element") is None:
+            self._ref_error = "ref_handle_missing"
+            return None
+        elem = cached["ax_element"]
+        try:
+            from ApplicationServices import AXUIElementCopyAttributeValue, AXUIElementCreateApplication
+            pid = self._elem_pid(elem)
+            if pid is None or pid != self._target_scope.get("pid"):
+                self._ref_error = "ref_target_mismatch"
+                return None
+            err, role = _ax_get(AXUIElementCopyAttributeValue, elem, "AXRole")
+            if err != 0 or not role or str(role) != cached.get("role_raw"):
+                self._ref_error = "element_stale"
+                return None
+            window = self._element_window(elem)
+            expected = self._target_window if self._target_window is not None else cached.get("ax_window")
+            if expected is not None:
+                err, windows = _ax_get(AXUIElementCopyAttributeValue, AXUIElementCreateApplication(pid), "AXWindows")
+                if window != expected or err != 0 or not any(w == expected for w in windows or []):
+                    self._ref_error = "ref_window_mismatch"
+                    return None
+            err, enabled = _ax_get(AXUIElementCopyAttributeValue, elem, "AXEnabled")
+            if for_action and (err != 0 or enabled is None):
+                self._ref_error = "element_state_unavailable"
+                return None
+            if for_action and not bool(enabled):
+                self._ref_error = "element_disabled"
+                return None
+        except Exception:
+            self._ref_error = "element_inaccessible"
+            return None
+        self._ref_error = "current"
+        return elem
+
+    def _invalid_ref_result(self, ref: str) -> LayerResult:
+        return LayerResult(ok=False, layer=self.name,
+                           message=f"Ref {ref!r} is invalid ({self._ref_error}); observe the target again.",
+                           data={"reason": self._ref_error, "dispatched": False}, dispatch_state="not_sent")
 
     def _strict_background_mode(self) -> dict[str, Any]:
         """Read the strict-background session config.
@@ -1091,14 +1111,24 @@ class DesktopAXLayer(Layer):
         except Exception:
             return None
         try:
-            needle = app.lower().removesuffix(".app")
             for a in NSWorkspace.sharedWorkspace().runningApplications():
-                name = (a.localizedName() or "").lower().removesuffix(".app")
-                if name == needle:
+                if self._matches_app(app, a):
                     return int(a.processIdentifier())
         except Exception:
             return None
         return None
+
+    @staticmethod
+    def _matches_app(app: str, running: Any) -> bool:
+        """Match an absolute bundle path exactly; names must not pick a clone."""
+        from pathlib import Path
+        if Path(app).is_absolute():
+            try:
+                bundle = running.bundleURL()
+                return bundle is not None and Path(str(bundle.path())).resolve() == Path(app).resolve()
+            except Exception:
+                return False
+        return (running.localizedName() or "").lower().removesuffix(".app") == app.lower().removesuffix(".app")
 
     def _focused_element_signature(self, app_elem: Any = None) -> Optional[dict[str, Any]]:
         """Read the AXFocusedUIElement of an app and return its role/name/subrole.
@@ -1159,27 +1189,29 @@ class DesktopAXLayer(Layer):
                 from ApplicationServices import AXUIElementGetActionNames as _GetActionNames
         except Exception:
             return False, None
+        act_name = None
         try:
             _, actions = _ax_get(_GetActionNames, elem, None)
             acts = [str(a) for a in (actions or [])]
             from ApplicationServices import AXUIElementPerformAction
             # Pick the preferred action for this atype, then fall back.
             if atype == "right_click":
-                preferred = ("AXShowMenu", "AXPress")
+                preferred = ("AXShowMenu",)
             else:  # click / double_click
-                preferred = ("AXPress", "AXConfirm", "AXOpen", "AXShowMenu", "AXToggle")
-            for act_name in preferred:
-                if act_name in acts:
+                preferred = ("AXPress", "AXConfirm", "AXOpen", "AXToggle")
+            for candidate in preferred:
+                if candidate in acts:
+                    act_name = candidate
                     # double_click: press twice with a tiny gap so apps that
                     # count presses treat it as a double-click.
                     err = AXUIElementPerformAction(elem, act_name)
                     if atype == "double_click" and err == 0 and act_name == "AXPress":
                         time.sleep(0.05)
-                        AXUIElementPerformAction(elem, act_name)
+                        err = AXUIElementPerformAction(elem, act_name)
                     return (err == 0), act_name
             return False, None
         except Exception:
-            return False, None
+            return False, act_name
 
     @staticmethod
     def _elem_pid(elem: Any) -> Optional[int]:
@@ -1201,13 +1233,12 @@ class DesktopAXLayer(Layer):
     def _pre_action_snapshot(self, elem: Any) -> Any:
         """Snapshot the element's AX state BEFORE an action fires.
 
-        Failure-tolerant: returns None (verify falls back to snapshotting in
-        _verify_action, which is only correct for not-yet-fired actions) when
-        the AX probe can't run.
+        Returns None if the probe cannot run. A click with no pre-action
+        baseline must report uncertainty rather than invent a late baseline.
         """
         try:
             from qcu.layers._ax_verify import snapshot
-            pid = self._elem_pid(elem) or self._app_pid_for(self._target_app)
+            pid = self._elem_pid(elem) or self._target_scope.get("pid")
             app_elem = None
             if pid:
                 from ApplicationServices import AXUIElementCreateApplication
@@ -1232,7 +1263,8 @@ class DesktopAXLayer(Layer):
         Keys: ``verified`` (yes/no/n/a), ``signal``, ``matched_at_ms``,
         ``samples``. Failure here means the action may have been a stub
         no-op; the caller (``_click``) should fall back to P4 (coordinate
-        click) and re-verify.
+        click) only if no action was sent. A missing signal after dispatch
+        cannot justify a replay.
 
         ``before``: a pre-action Snapshot taken by the caller BEFORE firing
         the action. Historically this function snapshot-ped after the action
@@ -1263,7 +1295,7 @@ class DesktopAXLayer(Layer):
             app_elem = None
             pid = self._elem_pid(elem)
             if not pid:
-                pid = self._app_pid_for(self._target_app)
+                pid = self._target_scope.get("pid")
             if pid:
                 try:
                     from ApplicationServices import AXUIElementCreateApplication
@@ -1298,29 +1330,52 @@ class DesktopAXLayer(Layer):
                 "error": f"{type(e).__name__}: {e}",
             }
 
-    def _ax_native_set_value(self, elem: Any, text: str) -> bool:
-        """Focus + set AXValue on a text/search field via AX. Returns True on
-        success. App Store search, TextEdit body, any AX-conformant text field
-        all work here — no coordinates, no keyboard, no clipboard."""
+    def _ax_native_set_value(self, elem: Any, text: str) -> tuple[bool, bool]:
+        """Return (transport succeeded, attempted); a failed send cannot replay."""
         try:
-            from ApplicationServices import AXUIElementSetAttributeValue
+            from ApplicationServices import AXUIElementSetAttributeValue, AXUIElementIsAttributeSettable
+            err, writable = _ax_get(AXUIElementIsAttributeSettable, elem, "AXValue")
+            if err != 0 or not writable:
+                return False, False
         except Exception:
-            return False
+            return False, False
         try:
-            AXUIElementSetAttributeValue(elem, "AXFocused", True)
-            AXUIElementSetAttributeValue(elem, "AXValue", str(text))
-            return True
+            return AXUIElementSetAttributeValue(elem, "AXValue", str(text)) == 0, True
         except Exception:
-            return False
+            return False, True
+
+    def _live_point(self, elem: Any) -> tuple[Optional[float], Optional[float]]:
+        try:
+            from ApplicationServices import AXUIElementCopyAttributeValue
+            err, position = _ax_get(AXUIElementCopyAttributeValue, elem, "AXPosition")
+            err2, size = _ax_get(AXUIElementCopyAttributeValue, elem, "AXSize")
+            position, size = _ax_geometry(position), _ax_geometry(size, size=True)
+            if err == 0 and err2 == 0 and position is not None and size is not None and float(size.width) > 0 and float(size.height) > 0:
+                return float(position.x) + float(size.width)/2, float(position.y) + float(size.height)/2
+        except Exception:
+            pass
+        return None, None
+
+    def _unknown_click_result(self, atype: str, target: str, verification: dict[str, Any]) -> LayerResult:
+        """Stop after an attempted action whose effect could not be confirmed."""
+        return LayerResult(
+            ok=False, layer=self.name,
+            message=(f"{atype} {target}: outcome unknown (verify={verification.get('verified', 'n/a')}). "
+                     "Read the current UI before deciding on another action."),
+            data={"reason": "outcome_unknown", "retry_safe": False,
+                  "dispatched": True, "verification": verification},
+            dispatch_state="sent", outcome="unknown",
+        )
 
     def _click(self, atype: str, params: dict[str, Any]) -> LayerResult:
         ref = params.get("ref")
         cx: Optional[float] = None
         cy: Optional[float] = None
         if isinstance(ref, str):
-            cached = self._last_refs.get(ref)
-            if cached is None:
-                return LayerResult(ok=False, layer=self.name, message=f"unknown ref {ref!r}")
+            elem = self._resolve_ax_element(ref)
+            if elem is None:
+                return self._invalid_ref_result(ref)
+            cached = self._last_refs[ref]
             cx, cy = cached.get("cx"), cached.get("cy")
         # AX-native click path (preferred): resolve the live AXUIElement and
         # Press it via AXUIElementPerformAction. No coordinates, no mouse —
@@ -1343,9 +1398,10 @@ class DesktopAXLayer(Layer):
                 if ok_ax:
                     # Critical: AXPress returning err=0 doesn't guarantee
                     # the action took effect (Electron stub no-op returns 0).
-                    # Run the post-action verify loop; if it's a stub no-op,
-                    # fall through to coordinate click + re-verify.
-                    verify_meta = self._verify_action(elem, role, atype, before=pre_snap)
+                    # A missing change is not proof that the action did nothing.
+                    verify_meta = (self._verify_action(elem, role, atype, before=pre_snap)
+                                   if pre_snap is not None else
+                                   {"verified": "n/a", "reason": "pre-action snapshot unavailable"})
                     verified = verify_meta.get("verified", "n/a")
                     if verified == "yes":
                         return LayerResult(
@@ -1353,166 +1409,36 @@ class DesktopAXLayer(Layer):
                             layer=self.name,
                             message=(
                                 f"click ref={ref} (via AXPress={act_name}, "
-                                f"verified at {verify_meta.get('matched_at_ms')}ms)"
+                                f"UI change at {verify_meta.get('matched_at_ms')}ms; outcome unconfirmed)"
                             ),
                             data={"verification": verify_meta},
                         )
-                    # verified=NO or N/A: AXPress may have been a no-op.
-                    # One known cause is focus: apps that ignore AXPress
-                    # while backgrounded (Calculator keypad verified by
-                    # probe: err=0, zero effect, works after activation).
-                    # Retry ONCE after bringing the target app forward —
-                    # cheaper and more precise than jumping straight to the
-                    # coordinate/AppleEvents fallbacks (which cost 3+s when
-                    # the element has no bounds).
-                    retry_meta = None
-                    if verified != "yes":
-                        # Resolve the owning app: prefer the session target,
-                        # else derive from the element's pid (works when
-                        # observe was --app-scoped and _target_app is unset).
-                        target_name = self._target_app
-                        if not target_name:
-                            try:
-                                from AppKit import NSWorkspace  # type: ignore
-                                got = self._elem_pid(elem)
-                                if got:
-                                    for a in NSWorkspace.sharedWorkspace().runningApplications():
-                                        if int(a.processIdentifier()) == got:
-                                            target_name = a.localizedName()
-                                            break
-                            except Exception:
-                                target_name = None
-                        if target_name:
-                            try:
-                                self._activate_app(target_name)
-                                time.sleep(0.3)
-                                ok_ax2, act_name2 = self._ax_native_click(elem, role, atype)
-                                if ok_ax2:
-                                    # Wider window: the effect can land late
-                                    # right after an activation (app cold-
-                                    # draw), and if this retry also misses
-                                    # we'd burn 3+s in the Apple Events
-                                    # fallback for an effect that DID happen.
-                                    retry_meta = self._verify_action(
-                                        elem, role, atype, window_ms=2500
-                                    )
-                                    if retry_meta.get("verified") == "yes":
-                                        return LayerResult(
-                                            ok=True,
-                                            layer=self.name,
-                                            message=(
-                                                f"click ref={ref} (via AXPress={act_name2} "
-                                                f"after activate_app, verified at "
-                                                f"{retry_meta.get('matched_at_ms')}ms)"
-                                            ),
-                                            data={"verification": retry_meta},
-                                        )
-                            except Exception:
-                                retry_meta = None
-                    # Still no effect: fall through to coordinate click and
-                    # re-verify there.
-                    axpress_failed_reason = (
-                        f"AXPress err=0 but verify={verified} "
-                        f"(signal={verify_meta.get('signal')}, "
-                        f"samples={verify_meta.get('samples')}, "
-                        f"diag={verify_meta.get('verify_diagnostics')})"
+                    return self._unknown_click_result(
+                        atype, f"ref={ref} via {act_name}", verify_meta,
                     )
+                elif act_name is not None:
+                    # A send error may follow an applied action. An alternate
+                    # transport cannot establish that the first send did nothing.
+                    result = self._unknown_click_result(
+                        atype, f"ref={ref} via {act_name}",
+                        {"verified": "n/a", "reason": "AX action returned an error"},
+                    )
+                    result.dispatch_state = "unknown"
+                    result.data["dispatched"] = None
+                    return result
                 else:
-                    axpress_failed_reason = "AXPress returned non-zero (element didn't accept)"
+                    axpress_failed_reason = "AX action unavailable; no action sent"
             else:
-                axpress_failed_reason = "AXUIElement not resolvable (no AX trust on QCU process?)"
+                return self._invalid_ref_result(ref)
 
-            # Apple Events fallback (priority 60 in the router, but reachable
-            # here when desktop_ax was forced as the chosen layer / ref was
-            # resolved against this layer's cache). Uses the numeric path we
-            # stored at observe time → "perform action AXPress of UI element N of …"
-            # chain. Needs only Automation TCC, not Accessibility, so it works
-            # even when ``AXIsProcessTrusted()`` is False. This was the
-            # concrete bug ZCode hit: Chrome ref clicks returned
-            # "click needs ref or x,y" even though the ref was cached.
-            if axpress_failed_reason is not None and self._target_app:
-                try:
-                    from qcu.layers._ax_action import (
-                        ax_path_list_to_applescript_chain,
-                        perform_axpress_via_osascript,
-                        perform_axpress_by_attributes,
-                    )
-
-                    # Step 1: positional path. Fast, but the AXU tree index
-                    # ≠ SE UI elements index, so this can fail with "invalid
-                    # index" even on a real element.
-                    path = cached.get("path") or []
-                    chain = ax_path_list_to_applescript_chain(path)
-                    action_name = (
-                        "AXShowMenu" if atype == "right_click" else "AXPress"
-                    )
-                    if chain is not None:
-                        ok, msg = perform_axpress_via_osascript(
-                            chain,
-                            app=self._target_app,
-                            action=action_name,
-                        )
-                        if ok:
-                            # double_click: press a second time, ~50ms gap.
-                            if atype == "double_click":
-                                import time as _t
-                                _t.sleep(0.05)
-                                perform_axpress_via_osascript(
-                                    chain, app=self._target_app, action="AXPress"
-                                )
-                            return LayerResult(
-                                ok=True,
-                                layer=self.name,
-                                message=(
-                                    f"click ref={ref} (via Apple Events {action_name}; "
-                                    f"AX fallback skipped: {axpress_failed_reason})"
-                                ),
-                            )
-                    # Step 2: descriptor tuple (role + subrole + name).
-                    # Works even when path indices disagree between AXUIElement
-                    # and System Events, which is the common case for Chrome's
-                    # web-area children. ~10-20ms slower due to an
-                    # ``entire contents of window 1`` scan, but uniquely
-                    # identifies the element when its name is set.
-                    descriptor_name = cached.get("name") or None
-                    descriptor_role = cached.get("role_raw") or None
-                    descriptor_subrole = cached.get("subrole") or None
-                    if descriptor_role or descriptor_subrole or descriptor_name:
-                        ok2, msg2 = perform_axpress_by_attributes(
-                            app=self._target_app,
-                            role=descriptor_role,
-                            subrole=descriptor_subrole,
-                            name=descriptor_name,
-                            action=action_name,
-                        )
-                        if ok2:
-                            if atype == "double_click":
-                                import time as _t
-                                _t.sleep(0.05)
-                                perform_axpress_by_attributes(
-                                    app=self._target_app,
-                                    role=descriptor_role,
-                                    subrole=descriptor_subrole,
-                                    name=descriptor_name,
-                                    action="AXPress",
-                                )
-                            return LayerResult(
-                                ok=True,
-                                layer=self.name,
-                                message=(
-                                    f"click ref={ref} (via Apple Events {action_name}"
-                                    f" by descriptor; AX path mismatched"
-                                    f"{f': {msg}' if False else ''})"
-                                ),
-                            )
-                        axpress_failed_reason = (
-                            f"{axpress_failed_reason}; Apple Events also failed: "
-                            f"path→{msg[:60]} | descriptor→{msg2[:80]}"
-                        )
-                except Exception:
-                    pass
         if "x" in params and "y" in params:
             cx, cy = float(params["x"]), float(params["y"])
+        elif isinstance(ref, str):
+            # Layout may move after observe. Do not click an old cached point.
+            elem = self._resolve_ax_element(ref)
+            if elem is None:
+                return self._invalid_ref_result(ref)
+            cx, cy = self._live_point(elem)
         if cx is None or cy is None:
             # Distinguish "ref looked plausible but had no geometry" from
             # "act was called without ref/coords". The previous message
@@ -1528,17 +1454,15 @@ class DesktopAXLayer(Layer):
                         f"({axpress_failed_reason}); element has no bounds for "
                         f"coordinate fallback (Chrome/Safari without "
                         f"AXManualAccessibility often returns no geometry). "
-                        f"Try `qcu observe --layer desktop_appleevents` then "
-                        f"re-issue the click via that layer."
+                        "No action was sent; re-observe this target or choose an explicitly supported action."
                     ),
                 )
             return LayerResult(ok=False, layer=self.name, message="click needs ref or x,y")
 
         # Click-safety gate (Bug: 多显示器/遮挡下坐标点击会落到飞书/Clash 等更高
         # 栈序窗口上)。在 CGEvent 下发前确认 (cx,cy) 仍属于目标 app 的窗口；
-        # 失败则 ok=False 中止，不向错误的窗口发事件。fail-open：Quartz 不可
-        # 用时安全门放行（不引入新硬依赖）。
-        safety = self._assert_click_target_for(cx, cy)
+        # 无法读取目标归属时中止，不向未经确认的窗口发送事件。
+        safety = self._assert_click_target_for(cx, cy, ref)
         if not safety["ok"]:
             from qcu.layers._click_safety import format_safety_failure
             return LayerResult(
@@ -1565,6 +1489,8 @@ class DesktopAXLayer(Layer):
         except Exception as e:  # noqa: BLE001
             return LayerResult(ok=False, layer=self.name, message=f"Quartz import failed: {e}")
 
+        coord_elem = self._resolve_ax_element(ref) if isinstance(ref, str) else None
+        coord_before = self._pre_action_snapshot(coord_elem) if coord_elem is not None else None
         try:
             pt = CGPoint(cx, cy)
             if atype == "hover":
@@ -1603,97 +1529,87 @@ class DesktopAXLayer(Layer):
                 elem_after = self._resolve_ax_element(ref)
                 if elem_after is not None:
                     role = (self._last_refs.get(ref) or {}).get("role", "")
-                    verify_meta = self._verify_action(elem_after, role, atype)
+                    verify_meta = (self._verify_action(elem_after, role, atype, before=coord_before)
+                                   if coord_before is not None else
+                                   {"verified": "n/a", "reason": "pre-action snapshot unavailable"})
                     verified = verify_meta.get("verified", "n/a")
                     if verified == "yes":
                         return LayerResult(
                             ok=True,
                             layer=self.name,
                             message=(
-                                f"{atype} at ({cx},{cy}) (via CGEvent, verified "
+                                f"{atype} at ({cx},{cy}) (via CGEvent, UI change "
                                 f"at {verify_meta.get('matched_at_ms')}ms)"
                             ),
                             data={"verification": verify_meta},
                         )
-                    # verified=no: the coordinate click also failed to move
-                    # the needle. Surface the AXPress-failed-reason too so
-                    # the LLM has the full picture.
-                    return LayerResult(
-                        ok=True,  # IPC succeeded
-                        layer=self.name,
-                        message=(
-                            f"{atype} at ({cx},{cy}) (CGEvent dispatched; "
-                            f"verify={verified} — possible stub no-op). "
-                            f"previous AXPress failure: {axpress_failed_reason or 'n/a'}"
-                        ),
-                        data={"verification": verify_meta, "axpress_failed_reason": axpress_failed_reason},
+                    return self._unknown_click_result(
+                        atype, f"at ({cx},{cy}) via CGEvent", verify_meta,
                     )
             return LayerResult(ok=True, layer=self.name, message=f"{atype} at ({cx},{cy})")
         except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}")
+            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}",
+                               data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown")
 
     def _scroll(self, params: dict[str, Any]) -> LayerResult:
-        """Vertical/horizontal scroll via a CGEvent scroll wheel.
-
-        params: {dy: int, dx: int} — positive dy scrolls down, dx right.
-        Uses CGEventCreateScrollWheelEvent2 (kCGScrollEventUnitLine).
-        """
-        dy = int(params.get("dy", 0))
-        dx = int(params.get("dx", 0))
+        """Post wheel events only at a currently verified point in this target."""
+        dy, dx = int(params.get("dy", 0)), int(params.get("dx", 0))
         if dy == 0 and dx == 0:
-            return LayerResult(ok=True, layer=self.name, message="scroll 0 (noop)")
+            return LayerResult(ok=True, layer=self.name, message="scroll 0 (noop)", dispatch_state="not_sent")
         try:
-            from Quartz.CoreGraphics import (
-                CGEventCreateScrollWheelEvent2,
-                CGEventPost,
-                kCGScrollEventUnitLine,
-                kCGHIDEventTap,
-            )
-        except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"Quartz scroll import failed: {e}")
+            from Quartz.CoreGraphics import (CGEventCreateScrollWheelEvent2, CGEventPost,
+                CGEventCreate, CGEventGetLocation, CGEventSetLocation,
+                kCGScrollEventUnitLine, kCGHIDEventTap)
+            from Quartz import CGPointMake
+            if params.get("x") is not None and params.get("y") is not None:
+                x, y = float(params["x"]), float(params["y"])
+            else:
+                point = CGEventGetLocation(CGEventCreate(None))
+                x, y = float(point.x), float(point.y)
+        except Exception as exc:
+            return LayerResult(ok=False, layer=self.name, message=f"Scroll position cannot be checked: {exc}",
+                               data={"reason": "coordinate_check_unavailable"}, dispatch_state="not_sent")
+        safety = self._assert_click_target_for(x, y)
+        if not safety.get("ok"):
+            return LayerResult(ok=False, layer=self.name, message="Scroll point is outside the confirmed target.",
+                               data={"reason": "coordinate_target_unconfirmed", "click_safety": safety}, dispatch_state="not_sent")
         try:
-            if dy:
-                ev = CGEventCreateScrollWheelEvent2(None, kCGScrollEventUnitLine, 1, dy, 0, 0)
-                CGEventPost(kCGHIDEventTap, ev)
-            if dx:
-                # Horizontal: swap the axis via a second wheel delta. CG scroll
-                # is signed; negative = the opposite direction.
-                ev = CGEventCreateScrollWheelEvent2(None, kCGScrollEventUnitLine, 1, 0, dx, 0)
-                CGEventPost(kCGHIDEventTap, ev)
-            return LayerResult(ok=True, layer=self.name, message=f"scrolled dy={dy} dx={dx}")
-        except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}")
+            event = CGEventCreateScrollWheelEvent2(None, kCGScrollEventUnitLine, 2, dy, dx, 0)
+            CGEventSetLocation(event, CGPointMake(x, y))
+        except Exception as exc:
+            return LayerResult(ok=False, layer=self.name, message=f"Scroll event could not be prepared: {exc}", dispatch_state="not_sent")
+        try:
+            CGEventPost(kCGHIDEventTap, event)
+            return LayerResult(ok=True, layer=self.name, message=f"scrolled dy={dy} dx={dx} at ({x},{y})", dispatch_state="sent")
+        except Exception as exc:
+            return LayerResult(ok=False, layer=self.name, message=f"Scroll outcome unknown: {exc}",
+                               data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown")
 
-    def _assert_click_target_for(self, cx: float, cy: float) -> dict[str, Any]:
-        """Click-safety gate: confirm ``(cx, cy)`` still belongs to the target
-        app's frontmost window before any CGEvent is posted.
-
-        Resolves the target app's live window bounds via
-        ``_vision.resolve_wid`` (cheap, one CGWindowList call) so the gate can
-        also catch the "window was dragged/resized since observe()" case. If
-        ``resolve_wid`` fails or the target app is unset, we still run the
-        owner check — a different app owning the point is the primary signal.
-
-        See ``qcu.layers._click_safety.assert_click_target`` for the verdict
-        schema and ``format_safety_failure`` for the message rendering.
-        Returns ``{"ok": True}`` when Quartz introspection is unavailable
-        (fail-open) so the gate never bricks clicks on a stripped host.
-        """
+    def _assert_click_target_for(self, cx: float, cy: float, ref: Optional[str] = None) -> dict[str, Any]:
+        """Coordinate input stays in the observed process and exact window."""
         from qcu.layers._click_safety import assert_click_target
-
-        app_window_bounds: Optional[dict[str, Any]] = None
-        if self._target_app:
-            try:
-                from qcu.layers._vision import resolve_wid
-
-                win = resolve_wid(self._target_app)
-                if win is not None:
-                    app_window_bounds = win.get("bounds")
-            except Exception:
-                app_window_bounds = None
-        return assert_click_target(
-            self._target_app, cx, cy, app_window_bounds=app_window_bounds,
-        )
+        scope = self._target_scope
+        if not scope.get("pid") or self._binding_error:
+            return {"ok": False, "reason": self._binding_error or "target_unbound"}
+        bounds = None
+        window_id = scope.get("window_id")
+        window = self._target_window
+        if ref:
+            elem = self._resolve_ax_element(ref)
+            if elem is None:
+                return {"ok": False, "reason": self._ref_error}
+            window = self._element_window(elem)
+            if window is None:
+                return {"ok": False, "reason": "ref_window_identity_unavailable"}
+        if window is not None:
+            live = self._window_identity(window, scope["pid"], scope.get("window_title", ""))
+            if not live.get("window_id") or (window_id is not None and live["window_id"] != window_id):
+                return {"ok": False, "reason": "target_window_identity_unavailable"}
+            window_id, bounds = live["window_id"], live.get("bounds")
+        elif scope.get("window_handle") and not window_id:
+            return {"ok": False, "reason": "target_window_identity_unavailable"}
+        return assert_click_target(self._target_app, cx, cy, app_window_bounds=bounds,
+                                   expected_pid=scope.get("pid"), expected_window_id=window_id)
 
     def _resolve_point(self, params: dict[str, Any], key_x: str, key_y: str,
                        ref_key: str) -> tuple[Optional[float], Optional[float], Optional[str]]:
@@ -1706,6 +1622,8 @@ class DesktopAXLayer(Layer):
         x: Optional[float] = params.get(key_x)
         y: Optional[float] = params.get(key_y)
         ref: Optional[str] = params.get(ref_key)
+        if isinstance(ref, str) and self._resolve_ax_element(ref) is None:
+            return None, None, ref
         if x is None or y is None:
             # also accept {from:{x,y}} nested form
             nested_key = "from" if key_x == "x1" else "to"
@@ -1714,11 +1632,10 @@ class DesktopAXLayer(Layer):
                 x = x if x is not None else nested.get("x")
                 y = y if y is not None else nested.get("y")
         if (x is None or y is None) and isinstance(ref, str):
-            cached = self._last_refs.get(ref)
-            if cached is None:
+            elem = self._resolve_ax_element(ref)
+            if elem is None:
                 return None, None, ref
-            x = cached.get("cx")
-            y = cached.get("cy")
+            x, y = self._live_point(elem)
         if x is None or y is None:
             return None, None, ref
         return float(x), float(y), ref
@@ -1764,7 +1681,9 @@ class DesktopAXLayer(Layer):
         # Click-safety gate on the drag *start* point (the mouse-down lands
         # there; same wrong-window risk as a click). The interpolated path is
         # inside the target window by construction once the start is validated.
-        safety = self._assert_click_target_for(x1, y1)
+        safety = self._assert_click_target_for(x1, y1, ref_from)
+        if safety["ok"]:
+            safety = self._assert_click_target_for(x2, y2, ref_to)
         if not safety["ok"]:
             from qcu.layers._click_safety import format_safety_failure
             return LayerResult(
@@ -1804,6 +1723,7 @@ class DesktopAXLayer(Layer):
                     try:
                         from ApplicationServices import AXUIElementCopyAttributeValue
                         _, pos = _ax_get(AXUIElementCopyAttributeValue, elem, "AXPosition")
+                        pos = _ax_geometry(pos)
                         if pos is not None:
                             nx = float(getattr(pos, "x", 0))
                             ny = float(getattr(pos, "y", 0))
@@ -1824,7 +1744,8 @@ class DesktopAXLayer(Layer):
                 data={"verification": verify_meta},
             )
         except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}")
+            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}",
+                               data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown")
 
     def _launch_app(self, app: str) -> LayerResult:
         """Launch (or reuse) an app **without bringing it to the foreground**.
@@ -1832,28 +1753,34 @@ class DesktopAXLayer(Layer):
         The previous implementation called ``open -a``, which activates the
         app — every QCU call ripped the user's focus away (the "霸道"行为).
         We now go through the shared :mod:`qcu.layers._app_launch` helper,
-        which prefers ``NSWorkspace.launchApplicationAtURL:options:configuration:error:``
-        with ``NSWorkspaceLaunchConfigurationActivationKey=False`` and only
-        falls back to ``open -a`` (which activates) when nothing else works.
+        which selects a background transport before sending and never replays
+        an uncertain native launch through another transport.
 
         Returns a LayerResult; the message includes ``(foreground)`` when
         QCU had no choice but to disturb focus.
         """
         from qcu.layers._app_launch import launch_app_background
 
-        ok, msg, focus_disturbed = launch_app_background(app)
+        launch_result = launch_app_background(app)
+        ok, msg, focus_disturbed = launch_result
+        state = getattr(launch_result, "dispatch_state", "sent" if ok else "not_sent")
         if not ok:
-            return LayerResult(ok=False, layer=self.name, message=msg)
+            return LayerResult(ok=False, layer=self.name, message=msg, dispatch_state=state,
+                               data={"reason": "outcome_unknown", "retry_safe": False} if state == "unknown" else {})
         # Verify the app actually came up with a window. Cold launches take a
         # moment to register on NSWorkspace + create an AXWindow; we poll for
         # up to ~2.5s (SwiftUI cold-launch territory) instead of a blind
         # sleep(0.8) that returned ok=true even when no window appeared.
         verify_meta = self._wait_for_app_window(app, timeout=2.5)
-        self._target_app = (app or "").strip()
+        self._target_app = verify_meta.get("app") or (app or "").strip()
+        self._target_scope = {}
+        self._target_window = None
+        self._last_refs = {}
+        self._refs.invalidate()
         try:
             from qcu.session import patch
 
-            patch(target_app=app)
+            patch(target_app=self._target_app)
         except Exception:
             pass
         marker = " (foreground — focus disturbed)" if focus_disturbed else " (background)"
@@ -1863,7 +1790,7 @@ class DesktopAXLayer(Layer):
         )
 
     def _wait_for_app_window(
-        self, app: str, *, timeout: float = 2.5, poll: float = 0.15
+        self, app: str, *, timeout: float = 2.5, poll: float = 0.15, target_pid: Optional[int] = None
     ) -> dict[str, Any]:
         """Poll until ``app`` has at least one AXWindow, then return a
         postcondition verdict dict. Mirrors the shape produced by
@@ -1879,14 +1806,16 @@ class DesktopAXLayer(Layer):
             )
         except Exception as e:  # noqa: BLE001
             return {"verified": "n/a", "error": f"AX unavailable: {type(e).__name__}"}
-        pid = self._app_pid_for(app)
-        if pid is None:
-            return {"verified": "no", "reason": f"no running process for {app!r}"}
-        app_elem = AXUIElementCreateApplication(pid)
         deadline = time.perf_counter() + timeout
         last_count = 0
         last_title: Optional[str] = None
+        pid = None
         while time.perf_counter() < deadline:
+            pid = target_pid or self._app_pid_for(app)
+            if pid is None:
+                time.sleep(poll)
+                continue
+            app_elem = AXUIElementCreateApplication(pid)
             try:
                 _, wins = _ax_get(AXUIElementCopyAttributeValue, app_elem, "AXWindows")
                 wins = list(wins or [])
@@ -1894,6 +1823,14 @@ class DesktopAXLayer(Layer):
                 wins = []
             last_count = len(wins)
             if wins:
+                app_name = app
+                try:
+                    from AppKit import NSRunningApplication
+                    running = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+                    if running is not None:
+                        app_name = running.localizedName() or app
+                except Exception:
+                    pass
                 try:
                     _, t = _ax_get(AXUIElementCopyAttributeValue, wins[0], "AXTitle")
                     last_title = clean_text(str(t)) if t else None
@@ -1904,77 +1841,63 @@ class DesktopAXLayer(Layer):
                     "signal": "window_change",
                     "n_windows": last_count,
                     "title": last_title,
+                    "pid": pid,
+                    "app": app_name,
                 }
             time.sleep(poll)
         return {
             "verified": "no",
             "signal": "window_change",
-            "reason": f"no AXWindow for {app!r} after {timeout:.1f}s",
+            "reason": (f"no running process for {app!r}" if pid is None else
+                       f"no AXWindow for {app!r} after {timeout:.1f}s"),
             "n_windows": last_count,
         }
 
     def _activate_app(self, app: str) -> LayerResult:
-        """Bring an already-running app to the foreground.
-
-        Walks NSWorkspace.runningApplications, matches by localizedName, and
-        activates via NSApplicationActivationPolicyAccessory/activateWithOptions.
-        Falls back to `open -a` (which also activates) if the app isn't found
-        in the running list.
-        """
+        """Activate one running process; uncertain activation is never replayed."""
         app = (app or "").strip()
         if not app:
             return LayerResult(ok=False, layer=self.name, message="activate_app needs params.app")
         try:
-            from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps  # type: ignore
-        except Exception as e:  # noqa: BLE001
-            # No AppKit — fall back to `open -a`, which activates a running app
-            # just the same.
-            return self._launch_app(app)
-        try:
+            from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps
             ws = NSWorkspace.sharedWorkspace()
-            target = None
-            # Case-insensitive match; 'Finder'/'finder'/'Finder.app' all work.
-            needle = app.lower().removesuffix(".app")
-            for a in ws.runningApplications():
-                name = (a.localizedName() or "")
-                if name.lower().removesuffix(".app") == needle:
-                    target = a
-                    break
-            if target is None:
-                # Not running yet — launch it (open -a launches+activates).
-                return self._launch_app(app)
-            target.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
-            time.sleep(0.4)
-            self._target_app = app
-            try:
-                from qcu.session import patch
-                patch(target_app=app)
-            except Exception:
-                pass
-            # Verify: the app must now be frontmost AND have a window. A bare
-            # activateWithOptions_ can return silently on a background-only or
-            # unresponsive app — same "ok=true but nothing happened" failure
-            # mode this module exists to eliminate.
-            verify_meta = self._wait_for_app_window(app, timeout=2.0)
-            frontmost_now = None
-            try:
-                frontmost_now = (ws.frontmostApplication().localizedName() or "")
-            except Exception:
-                pass
-            verify_meta["frontmost_after"] = frontmost_now
-            if frontmost_now and frontmost_now.lower().removesuffix(".app") != app.lower().removesuffix(".app"):
-                verify_meta["verified"] = "no"
-                verify_meta["reason"] = (
-                    f"activate did not bring {app!r} to front (frontmost={frontmost_now!r})"
-                )
-            return LayerResult(
-                ok=True, layer=self.name,
-                message=f"activated {app} (verify={verify_meta.get('verified')})",
-                data={"verification": verify_meta},
-            )
-        except Exception as e:  # noqa: BLE001
-            # Last resort: open -a.
-            return self._launch_app(app)
+            candidates = [running for running in ws.runningApplications() if self._matches_app(app, running)]
+            if self._target_scope.get("pid") and self._target_app == app:
+                candidates = [running for running in candidates if int(running.processIdentifier()) == self._target_scope["pid"]]
+            if len(candidates) != 1:
+                return LayerResult(ok=False, layer=self.name, message="Application is missing or ambiguous; observe a unique process first.",
+                                   data={"reason": "ambiguous_app" if candidates else "app_not_found",
+                                         "candidates": [{"pid": int(a.processIdentifier()), "app": a.localizedName()} for a in candidates]}, dispatch_state="not_sent")
+            target = candidates[0]
+        except Exception as exc:
+            return LayerResult(ok=False, layer=self.name, message=f"Cannot resolve activation target: {exc}", dispatch_state="not_sent")
+        try:
+            accepted = target.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+        except Exception as exc:
+            return LayerResult(ok=False, layer=self.name, message=f"Activation outcome unknown: {exc}",
+                               data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown")
+        self._target_app = target.localizedName() or app
+        self._target_scope = {"pid": int(target.processIdentifier()), "app": self._target_app}
+        self._target_window = None
+        self._last_refs = {}
+        self._refs.invalidate()
+        try:
+            from qcu.session import patch
+            patch(target_app=self._target_app)
+        except Exception:
+            pass
+        verify_meta = self._wait_for_app_window(self._target_app, timeout=2.0, target_pid=self._target_scope["pid"])
+        try:
+            foreground = ws.frontmostApplication()
+            front_matches = foreground is not None and int(foreground.processIdentifier()) == self._target_scope["pid"]
+        except Exception:
+            front_matches = False
+        verified = verify_meta.get("verified") == "yes" and front_matches
+        return LayerResult(ok=verified, layer=self.name,
+                           message=f"activate {self._target_app}: " + ("foreground process confirmed" if verified else "outcome unconfirmed"),
+                           data={"verification": {"verified": verified, "frontmost_matches": front_matches,
+                                                   "window_evidence": verify_meta}, "retry_safe": False},
+                           dispatch_state="sent" if accepted else "unknown", outcome="verified" if verified else "unknown")
 
     def _type_text(self, text: str) -> LayerResult:
         """Type text via clipboard paste (Cmd+V).
@@ -2025,7 +1948,8 @@ class DesktopAXLayer(Layer):
                 ok=True, layer=self.name, message=f"typed {len(text)} chars (via clipboard)"
             )
         except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}")
+            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}",
+                               data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown")
 
     # macOS virtual keycodes. Covers the common named keys PLUS letters and
     # the symbol keys most often used in shortcuts (Cmd+[ , Cmd+], Cmd+,).
@@ -2167,7 +2091,7 @@ class DesktopAXLayer(Layer):
                         f"{type(e).__name__}: {e} "
                         "(failed posting key event — missing Input Monitoring "
                         "permission? run: qcu doctor)"
-                    ),
+                    ), data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown",
                 )
 
         # Single key: named (Enter/Tab/…) or a lone character.
@@ -2197,7 +2121,7 @@ class DesktopAXLayer(Layer):
                     f"{type(e).__name__}: {e} "
                     "(failed posting key event — missing Input Monitoring "
                     "permission? run: qcu doctor)"
-                ),
+                ), data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown",
             )
 
     # Keys whose effect is a change in the frontmost app or the focused
@@ -2274,108 +2198,65 @@ class DesktopAXLayer(Layer):
 
     def _fill(self, params: dict[str, Any]) -> LayerResult:
         ref = params.get("ref")
-        text = params.get("text", "")
+        text = str(params.get("text", ""))
         if not isinstance(ref, str):
-            return LayerResult(ok=False, layer=self.name, message="fill needs params.ref")
-        cached = self._last_refs.get(ref)
-        if cached is None:
-            return LayerResult(ok=False, layer=self.name, message=f"unknown ref {ref!r}")
-        # AX-native fill path (preferred): resolve the live AXUIElement and set
-        # AXValue directly (no click, no keyboard, no clipboard). This is what
-        # makes App Store search / TextEdit body / any AX-conformant field
-        # writable without needing geometry or stable focus. Below is the
-        # coordinate+keyboard fallback only used if AX set fails.
+            return LayerResult(ok=False, layer=self.name, message="fill needs params.ref", dispatch_state="not_sent")
         elem = self._resolve_ax_element(ref)
-        if elem is not None and self._ax_native_set_value(elem, str(text)):
-            # Verify the write landed. AXValue setattr on a well-behaved native
-            # app is synchronous, but some apps (SwiftUI fields with input
-            # masks) reformat the value. The verify loop catches both "the
-            # write was a no-op" and "the app rejected or reformatted my input".
-            role = cached.get("role", "")
-            verify_meta = self._verify_action(elem, role, "fill", expected_text=str(text))
-            verified = verify_meta.get("verified", "n/a")
-            extra_msg = ""
-            if verified == "no":
-                # Surface the actual value seen — the app may have reformatted
-                # it (date picker auto-slash / number-strip-leading-zero), not
-                # failed. Give the LLM the raw read-back so it can decide.
-                diag = verify_meta.get("verify_diagnostics") or {}
-                actual_value = diag.get("value_after")
-                extra_msg = (
-                    f" (verify=no; app may have reformatted — actual value was "
-                    f"{actual_value!r} (expected {str(text)!r}))"
-                )
-            elif verified == "n/a":
-                extra_msg = " (verify unavailable)"
-            return LayerResult(
-                ok=True, layer=self.name,
-                message=f"filled ref={ref} with {len(str(text))} chars (via AXValue, verify={verified}){extra_msg}",
-                data={"verification": verify_meta},
-            )
-        cx, cy = cached.get("cx"), cached.get("cy")
-        # If the ref has geometry, click into it first to focus it. If it has
-        # NO geometry (common for AXTextArea / scroll-area bodies, which don't
-        # report AXPosition/AXSize on all apps), skip the click and type into
-        # whatever is currently focused — for a freshly-launched TextEdit/Notes
-        # the body is focused by default, so the paste still lands correctly.
-        if cx is not None and cy is not None:
-            click_res = self._click("click", {"x": cx, "y": cy})
-            if not click_res.ok:
-                return click_res
-        return self._type_text(str(text))
+        if elem is None:
+            return self._invalid_ref_result(ref)
+        succeeded, attempted = self._ax_native_set_value(elem, text)
+        if not attempted:
+            return LayerResult(ok=False, layer=self.name, message="AXValue is not writable; no action sent.",
+                               data={"reason": "unsupported", "dispatched": False}, dispatch_state="not_sent")
+        if not succeeded:
+            return LayerResult(ok=False, layer=self.name, message="AXValue call outcome unknown; observe before acting again.",
+                               data={"reason": "outcome_unknown", "retry_safe": False}, dispatch_state="unknown")
+        verification = self._verify_condition({"kind": "value", "ref": ref, "equals": text, "timeout_ms": 400})
+        return LayerResult(ok=bool(verification.get("verified")), layer=self.name,
+                           message=f"fill ref={ref}: " + ("requested value confirmed" if verification.get("verified") else "sent; value unconfirmed"),
+                           data={"verification": verification, "dispatched": True, "retry_safe": False},
+                           dispatch_state="sent", outcome="verified" if verification.get("verified") else "unknown")
 
     def _screenshot(self, path: Optional[str]) -> LayerResult:
+        scope = self._target_scope
+        if not scope.get("window_id") or self._binding_error:
+            return LayerResult(ok=False, layer=self.name,
+                               message="Screenshot requires a uniquely observed window and its live capture identity.",
+                               data={"reason": "target_window_unbound", "target": dict(scope)}, dispatch_state="not_sent")
         try:
-            from Quartz import CGWindowListCreateImage  # type: ignore
-            from Quartz import kCGWindowListOptionOnScreenOnly  # type: ignore
-            from Quartz import kCGNullWindowID  # type: ignore
-            from Quartz.CoreGraphics import CGRectInfinite  # type: ignore
-            from Quartz import CGImageDestinationCreateWithURL  # type: ignore
-            from Quartz import CGImageDestinationAddImage  # type: ignore
-            from Quartz import CGImageDestinationFinalize  # type: ignore
-            from CoreFoundation import CFURLCreateWithFileSystemPath  # type: ignore
-            from CoreFoundation import kCFURLPOSIXPathStyle  # type: ignore
-            import Quartz  # type: ignore
-        except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"Quartz screenshot failed: {e}")
-        try:
-            img = CGWindowListCreateImage(
-                CGRectInfinite,
-                kCGWindowListOptionOnScreenOnly,
-                kCGNullWindowID,
-                0,
-            )
-            # A None/all-black capture is the classic Screen Recording
-            # denied fingerprint on modern macOS. Tell the user how to fix
-            # it instead of leaving a generic "screenshot failed".
-            if img is None:
-                return LayerResult(
-                    ok=False,
-                    layer=self.name,
-                    message=(
-                        "CGWindowListCreateImage returned no image — "
-                        "missing Screen Recording permission? run: qcu doctor "
-                        "(after granting, restart the QCU session for it to "
-                        "take effect)"
-                    ),
-                )
-            if path is None:
-                return LayerResult(ok=True, layer=self.name, message="screenshot (in-memory only)")
-            url = CFURLCreateWithFileSystemPath(None, path, kCFURLPOSIXPathStyle, False)
-            dest = CGImageDestinationCreateWithURL(url, "public.png", 1, None)
-            CGImageDestinationAddImage(dest, img, None)
-            CGImageDestinationFinalize(dest)
-            return LayerResult(ok=True, layer=self.name, message=f"screenshot saved to {path}")
-        except Exception as e:  # noqa: BLE001
-            return LayerResult(
-                ok=False,
-                layer=self.name,
-                message=(
-                    f"{type(e).__name__}: {e} "
-                    "(screenshot failed — if the screen is non-empty this is "
-                    "usually a missing Screen Recording permission; run: qcu doctor)"
-                ),
-            )
+            import Quartz
+            from CoreFoundation import CFURLCreateWithFileSystemPath, kCFURLPOSIXPathStyle
+            windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
+            matched = [w for w in windows or [] if int(w.get("kCGWindowNumber") or 0) == scope["window_id"]
+                       and int(w.get("kCGWindowOwnerPID") or 0) == scope["pid"]]
+            if len(matched) != 1:
+                return LayerResult(ok=False, layer=self.name, message="Bound window is missing; observe again.",
+                                   data={"reason": "target_window_stale"}, dispatch_state="not_sent")
+            bounds = dict(matched[0]["kCGWindowBounds"])
+            image = Quartz.CGWindowListCreateImage(Quartz.CGRectNull,
+                        Quartz.kCGWindowListOptionIncludingWindow, scope["window_id"],
+                        Quartz.kCGWindowImageBoundsIgnoreFraming)
+            if image is None:
+                return LayerResult(ok=False, layer=self.name,
+                                   message="Target window capture unavailable; check Screen Recording permission.",
+                                   data={"reason": "capture_unavailable"}, dispatch_state="not_sent")
+            scale = float(Quartz.CGImageGetWidth(image)) / float(bounds["Width"])
+            if path:
+                url = CFURLCreateWithFileSystemPath(None, path, kCFURLPOSIXPathStyle, False)
+                destination = Quartz.CGImageDestinationCreateWithURL(url, "public.png", 1, None)
+                Quartz.CGImageDestinationAddImage(destination, image, None)
+                if not Quartz.CGImageDestinationFinalize(destination):
+                    return LayerResult(ok=False, layer=self.name, message="Screenshot file could not be finalized.", dispatch_state="not_sent")
+            return LayerResult(ok=True, layer=self.name, message=f"Target screenshot saved to {path}" if path else "Target screenshot captured",
+                               data={"target": dict(scope), "coordinate_origin": {"x": bounds["X"], "y": bounds["Y"]},
+                                     "coordinate_scale": scale, "path": path}, dispatch_state="not_sent")
+        except Exception as exc:
+            return LayerResult(ok=False, layer=self.name, message=f"Target screenshot unavailable: {exc}",
+                               data={"reason": "capture_unavailable"}, dispatch_state="not_sent")
 
     def close(self) -> None:
         self._last_refs = {}
+        self._refs.invalidate()
+        self._target_window = None
+        self._binding_error = "backend_closed"
+        self._observed_control_count = None

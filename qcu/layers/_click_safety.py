@@ -41,10 +41,9 @@ approved plan ("Abort with clear error") and is consistent with
 ``--strict-background`` (a wrong-window click is exactly the foreground
 drift that mode already refuses on).
 
-The gate is **fail-open**: if Quartz / window-list introspection is
-unavailable for any reason (import error, empty list, exception), it
-returns ``ok=True`` with a ``reason`` — never introducing a new hard
-dependency that could brick clicks on a stock machine.
+The gate fails closed when ownership cannot be established. Missing Quartz,
+failed window enumeration, and unknown target identity never authorize input.
+Explicit coordinates follow the same application/window ownership checks.
 """
 
 from __future__ import annotations
@@ -97,9 +96,8 @@ def _window_list() -> Optional[list[dict[str, Any]]]:
     except Exception:
         return None
     try:
-        return list(CGWindowListCopyWindowInfo(
-            kCGWindowListOptionOnScreenOnly, kCGNullWindowID
-        ) or [])
+        windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+        return None if windows is None else list(windows)
     except Exception:
         return None
 
@@ -124,6 +122,7 @@ def _shape_window(w: dict[str, Any]) -> Optional[dict[str, Any]]:
             alpha = 1.0
         return {
             "owner": str(w.get("kCGWindowOwnerName") or ""),
+            "pid": w.get("kCGWindowOwnerPID"),
             "wid": w.get("kCGWindowNumber"),
             "layer": int(w.get("kCGWindowLayer", 0) or 0),
             "alpha": alpha,
@@ -143,7 +142,7 @@ def windows_at_point(x: float, y: float) -> list[dict[str, Any]]:
     overlays, status items, modal sheets) — those are exactly the windows that
     can intercept a CGEvent posted at ``(x, y)`` while belonging to a different
     app than the intended target. Returns ``[]`` if Quartz is unavailable
-    (callers treat that as fail-open).
+    (callers must refuse input when ownership cannot be established).
     """
     wins = _window_list()
     if wins is None:
@@ -232,6 +231,8 @@ def assert_click_target(
     y: float,
     *,
     app_window_bounds: Optional[dict[str, Any]] = None,
+    expected_pid: Optional[int] = None,
+    expected_window_id: Optional[int] = None,
 ) -> dict[str, Any]:
     """Verify that a coordinate click at ``(x, y)`` would hit ``app``.
 
@@ -265,13 +266,14 @@ def assert_click_target(
                                          target window bounds (window moved /
                                          resized since the ref was cached).
       - ``"safety_probe_unavailable"`` — Quartz/window-list introspection
-                                         unavailable; **fail-open** ``ok=True``
-                                         so this module never bricks clicks
-                                         on a non-macOS or stripped-down host.
+                                         unavailable; the click is refused.
+      - ``"wrong_window"`` / ``"wrong_process"`` — identity differs even if
+                                         the application name matches.
     """
     expected = (app or "").strip()
     base: dict[str, Any] = {
         "expected_app": expected or None,
+        "expected_pid": expected_pid, "expected_window_id": expected_window_id,
         "x": float(x),
         "y": float(y),
     }
@@ -279,8 +281,13 @@ def assert_click_target(
     # Snapshot the full candidate list ONCE — window_at_point and the overlay
     # check must walk the same list, and CGWindowListCopyWindowInfo is not
     # free. ``all_here`` is frontmost-first.
-    all_here = windows_at_point(x, y)
-    quartz_up = _quartz_available()
+    raw_windows = _window_list()
+    if raw_windows is None:
+        return {**base, "ok": False, "reason": "safety_probe_unavailable", "owner": None}
+    if not expected and expected_pid is None:
+        return {**base, "ok": False, "reason": "target_unbound", "owner": None}
+    all_here = [shaped for w in raw_windows if (shaped := _shape_window(w)) is not None
+                and shaped["is_onscreen"] and _point_in_bounds(x, y, shaped["bounds"])]
 
     # First pass: find the intended layer-0 target among the candidates.
     target_win: Optional[dict[str, Any]] = None
@@ -291,21 +298,23 @@ def assert_click_target(
         break
 
     if target_win is None:
-        # Could be "no window here" OR "Quartz unavailable". If Quartz itself
-        # is missing we fail-open (don't add a hard dep); if Quartz is present
-        # and the list simply had no hit we hard-abort.
-        if not quartz_up:
-            return {**base, "ok": True, "reason": "safety_probe_unavailable", "owner": None}
         return {
             **base, "ok": False, "reason": "point_not_in_any_window", "owner": None,
         }
 
     owner = target_win["owner"]
-    if not _owner_match(owner, expected):
+    if expected and not _owner_match(owner, expected):
         return {
             **base, "ok": False, "reason": "wrong_owner", "owner": owner,
             "owner_title": target_win.get("title"),
         }
+
+    if expected_pid is not None and target_win.get("pid") != expected_pid:
+        return {**base, "ok": False, "reason": "wrong_process", "owner": owner,
+                "owner_pid": target_win.get("pid")}
+    if expected_window_id is not None and target_win.get("wid") != expected_window_id:
+        return {**base, "ok": False, "reason": "wrong_window", "owner": owner,
+                "owner_window_id": target_win.get("wid"), "owner_title": target_win.get("title")}
 
     # Owner matches. Now check whether a higher-stacked window (overlay /
     # floating panel / status item belonging to a DIFFERENT app) covers the
@@ -319,6 +328,11 @@ def assert_click_target(
     # target app's own modal sheet) are not occluders.
     target_idx = all_here.index(target_win)
     occluder = overlay_occluder(all_here[:target_idx], expected)
+    # A same-app floating window is still a different target when the caller
+    # bound one exact window. Never let owner-name equality erase that scope.
+    if expected_window_id is not None:
+        occluder = next((w for w in all_here[:target_idx]
+                         if w.get("wid") != expected_window_id and w.get("alpha", 1.0) > 0.02), occluder)
     if occluder is not None:
         return {
             **base, "ok": False, "reason": "occluded_by_overlay",
@@ -344,8 +358,7 @@ def _quartz_available() -> bool:
     """True iff the Quartz window-list API is importable on this host.
 
     Used only to distinguish "no window at point" (real, hard-abort) from
-    "Quartz missing entirely" (environment, fail-open) so the safety gate
-    degrades cleanly on non-macOS test machines.
+    "Quartz missing entirely" (environment, input refused).
     """
     try:
         from Quartz import (  # noqa: F401
@@ -369,6 +382,12 @@ def format_safety_failure(safety: dict[str, Any]) -> str:
     y = safety.get("y")
     expected = safety.get("expected_app") or "<unknown>"
     owner = safety.get("owner")
+    if reason in {"safety_probe_unavailable", "target_unbound"}:
+        return (f"click at ({x},{y}) aborted: cannot confirm target ownership ({reason}). "
+                "Restore target inspection and observe the intended application/window again.")
+    if reason in {"wrong_process", "wrong_window"}:
+        return (f"click at ({x},{y}) aborted: {reason}; the point does not belong to "
+                f"the bound process/window for {expected!r}. Observe the target again.")
     if reason == "wrong_owner":
         who = owner or "another app"
         extra = f" ({safety['owner_title']!r})" if safety.get("owner_title") else ""

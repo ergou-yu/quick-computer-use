@@ -21,43 +21,14 @@ CAPABILITY ENVELOPE — read this before promising anything
   caller can either (a) request an explicit ``activate`` first, or
   (b) fall through to a different layer.
 
-LADDER
-------
-1. ``capture_window(app)`` — resolve the *current* CGWindowID for the
-   target app (never cache — window IDs mutate when apps re-activate /
-   re-raise); ``CGWindowListCreateImage`` with the default flag
-   (kCGWindowListOptionIncludingWindow = 1, imageOptions = 0).
-   ⚠️ NEVER pass ``kCGWindowImageBoundsIgnoreFraming=2`` — when the target
-   app isn't frontmost, WindowServer renders the *current frontmost*
-   window's contents into the captured frame, producing a silent-content
-   swap (caught by probe A on 2026-08-03).
-2. ``downsample_if_large(png_bytes)`` — Retina 2× captures on a 2444×2070
-   window average **545 ms** OCR. Halving the long edge → ~150 ms with ≤3%
-   OCR miss on small text (probe B 2026-08-03). Threshold: ```pixels > 1.5M```.
-3. ``ocr(png_bytes)`` — Apple Vision ``VNRecognizeTextRequest``, level=accurate,
-   langs [zh-Hans, en-US, zh-Hant]. Coordinate frame is **normalized
-   bottom-left origin** — ``y = img_h - (bb.origin.y + bb.size.height) * img_h``
-   flips to screen-coordinate top-left origin.
-4. ``tie_break(matches)`` — exact > substring, high confidence > low,
-   larger bbox > smaller; if still tied → ``ambiguous`` verdict with all
-   candidates surfaced for the LLM.
-5. ``click_at(x, y)`` — Quartz ``CGEventCreateMouseEvent`` + ``CGEventPost``,
-   then a post-click screen diff (SSIM / pHash) for ``verified``.
-6. Return: ``LayerResult(ok, verified, via="v2_ocr", data={"stage": ...})``.
-
-FAILURE TAXONOMY (review-driven, must not collapse)
----------------------------------------------------
-- ``locate_fail`` — OCR returned no candidates for the desc; the action
-  was never sent. Caller: upgrade to V4. ``ok=False``.
-- ``act_fail`` — CGEvent dispatch raised (transport failure). Caller:
-  retry. ``ok=False``.
-- ``verify_fail`` — click dispatched, but pre-vs-post image diff was
-  below SSIM threshold (no visible change). Caller: auto-retry once
-  (re-ocr on the same target → re-click into the bbox center → re-diff);
-  still no change → upgrade to V4. ``ok=True, verified="no"``.
-
-These three are NOT interchangeable. The verify_telemetry schema and any
-V4 escalation logic downstream depends on this categorization.
+Safety contract
+---------------
+Resolve one explicit process/window before capture; capture, OCR, input and
+post-action reads retain that identity. Missing ownership inspection refuses
+input. A screenshot difference is reported as ``ui_changed`` and does not
+verify task completion. Only an explicit text postcondition can verify an OCR
+click result. Dispatch exceptions and missing evidence never authorize replay.
+OCR fill is unsupported until target focus and field value can be read safely.
 """
 
 from __future__ import annotations
@@ -195,7 +166,8 @@ class LayerResultData:
 # ---------------------------------------------------------------------------
 
 
-def resolve_wid(app: str, window_title: Optional[str] = None) -> Optional[dict[str, Any]]:
+def resolve_wid(app: str, window_title: Optional[str] = None, *,
+                pid: Optional[int] = None, window_id: Optional[int] = None) -> Optional[dict[str, Any]]:
     """Look up the live window for ``app`` (by owner name) every time.
 
     Returns ``{wid, bounds, owner}`` or None when no on-screen window
@@ -216,24 +188,30 @@ def resolve_wid(app: str, window_title: Optional[str] = None) -> Optional[dict[s
         )
     except Exception:
         return None
+    matches = []
     for w in windows or []:
         try:
-            if (w.get("kCGWindowOwnerName") or "") != app:
+            if pid is not None and w.get("kCGWindowOwnerPID") != pid:
+                continue
+            if window_id is not None and w.get("kCGWindowNumber") != window_id:
+                continue
+            if (w.get("kCGWindowOwnerName") or "").casefold().removesuffix(".app") != app.casefold().removesuffix(".app"):
                 continue
             if w.get("kCGWindowLayer", 0) != 0:
                 continue  # skip menu bar / overlay layers
             t = w.get("kCGWindowTitle") or ""
             if window_title and window_title not in t:
                 continue
-            return {
+            matches.append({
                 "wid": w.get("kCGWindowNumber"),
+                "pid": w.get("kCGWindowOwnerPID"),
                 "bounds": dict(w.get("kCGWindowBounds") or {}),
                 "title": t,
                 "owner": app,
-            }
+            })
         except Exception:
             continue
-    return None
+    return matches[0] if len(matches) == 1 else None
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +258,7 @@ def occlusion_check(
             kCGNullWindowID,
         )
     except Exception:
-        return {"occluded": False, "occluders": [], "coverage_ratio": 0.0,
+        return {"occluded": True, "occluders": [], "coverage_ratio": 0.0,
                 "reason": "quartz_unavailable"}
 
     try:
@@ -288,7 +266,7 @@ def occlusion_check(
             kCGWindowListOptionOnScreenOnly, kCGNullWindowID
         ) or [])
     except Exception:
-        return {"occluded": False, "occluders": [], "coverage_ratio": 0.0,
+        return {"occluded": True, "occluders": [], "coverage_ratio": 0.0,
                 "reason": "windowlist_failed"}
 
     # Find target index inside the same on-screen list so stacking is consistent.
@@ -318,8 +296,7 @@ def occlusion_check(
 
     for i in range(target_idx):  # strictly above in stacking
         w = windows[i]
-        if w.get("kCGWindowLayer", 0) != 0:
-            continue
+        # Floating windows can intercept input and obscure target content.
         # Explicit default to 1.0 — never use ``or`` because 0.0 (fully
         # transparent) is itself falsy and would be replaced by 1.0.
         alpha = w.get("kCGWindowAlpha", 1.0)
@@ -404,7 +381,8 @@ def _activate_and_recheck(
 # ---------------------------------------------------------------------------
 
 
-def capture_window(app: str, window_title: Optional[str] = None) -> tuple[bytes, dict[str, Any]]:
+def capture_window(app: str, window_title: Optional[str] = None, *,
+                   pid: Optional[int] = None, window_id: Optional[int] = None) -> tuple[bytes, dict[str, Any]]:
     """Capture the target app's window as PNG bytes.
 
     Returns ``(png_bytes, meta)`` where meta has ``image_w_px`` /
@@ -414,7 +392,7 @@ def capture_window(app: str, window_title: Optional[str] = None) -> tuple[bytes,
     an empty image — empty image is exactly the silent-blank bug we must
     avoid).
     """
-    win = resolve_wid(app, window_title)
+    win = resolve_wid(app, window_title, pid=pid, window_id=window_id)
     if win is None:
         raise RuntimeError(f"no on-screen window for {app!r}{f' / {window_title!r}' if window_title else ''}")
     b = win["bounds"]
@@ -460,7 +438,12 @@ def capture_window(app: str, window_title: Optional[str] = None) -> tuple[bytes,
     # Pillow for the true pixel size; otherwise approximate from bounds using
     # the real backing scale factor (not a hardcoded 2× — wrong on non-Retina
     # external displays).
-    backing_scale = _backing_scale_for_bounds(b)
+    from Quartz import CGImageGetWidth, CGImageGetHeight
+    # Derive scale from the captured image itself; a guessed display scale
+    # cannot safely map OCR pixels into global mouse coordinates.
+    backing_scale = float(CGImageGetWidth(img)) / float(b["Width"])
+    if backing_scale <= 0 or abs(float(CGImageGetHeight(img)) / float(b["Height"]) - backing_scale) > 0.05:
+        raise RuntimeError("screenshot coordinate scale is unavailable or inconsistent")
     try:
         from PIL import Image  # type: ignore
 
@@ -476,6 +459,7 @@ def capture_window(app: str, window_title: Optional[str] = None) -> tuple[bytes,
         "scale": 1,
         "backing_scale": backing_scale,  # image px ÷ this = screen points
         "wid": win["wid"],
+        "pid": win.get("pid"),
         "bounds": b,
     }
 
@@ -724,226 +708,105 @@ def verify_via_diff(before_png: bytes, after_png: bytes) -> tuple[str, int]:
 
 
 def click(
-    app: str,
-    desc: str,
-    *,
-    window_title: Optional[str] = None,
-    verify_visibility: bool = True,
-    self_heal: bool = True,
+    app: str, desc: str, *, window_title: Optional[str] = None,
+    pid: Optional[int] = None, window_id: Optional[int] = None,
+    verify_visibility: bool = True, self_heal: bool = False,
+    verify: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Locate ``desc`` text inside ``app``'s window via OCR and click it.
+    """OCR-locate one window target, send one click and read an optional text condition.
 
-    Contract: returns a dict suitable for LayerResult.data with at minimum:
-      - ``ok``: bool
-      - ``stage``: "ok" / "locate_fail" / "act_fail" / "verify_fail" / "ambiguous"
-      - ``via``: "v2_ocr"
-      - ``verified``: "yes" | "no" | "n/a" (only meaningful when ok=True)
-      - ``elapsed_ms``: float
-
-    Pre-capture visibility gate
-    ---------------------------
-    When ``verify_visibility=True`` (default), the first thing this does is
-    ``resolve_wid`` + ``occlusion_check``. If the target is occluded and
-    ``self_heal=True``, ``activate_app`` is attempted once and occlusion is
-    re-checked; if still occluded we return ``stage="locate_fail",
-    reason="target_occluded"`` with the coverage_ratio and occluder list
-    instead of silently OCR-ing the wrong window. Set ``verify_visibility=False``
-    for unit tests or when the caller has already guaranteed visibility.
+    ``self_heal`` is accepted for compatibility but never changes target/focus.
+    ``verify_visibility=False`` does not disable the final ownership gate.
     """
-    t0 = time.perf_counter()
-    data = LayerResultData(via="v2_ocr")
-
-    # ---- Pre-capture visibility gate -------------------------------------
+    from qcu.common.verification import validate_condition
+    from qcu.layers._click_safety import assert_click_target
+    started = time.perf_counter()
+    base = {"via": "v2_ocr", "dispatch_state": "not_sent", "outcome": "unknown", "dispatched": False}
+    def result(ok: bool, stage: str, **data: Any) -> dict[str, Any]:
+        return {**base, "ok": ok, "stage": stage,
+                "elapsed_ms": (time.perf_counter() - started) * 1000, **data}
+    try:
+        validate_condition(verify)
+        if verify is not None and (verify["kind"] != "text" or verify.get("ref")):
+            return result(False, "locate_fail", reason="unsupported_verification")
+    except ValueError as exc:
+        return result(False, "locate_fail", reason="invalid_verification", error=str(exc))
+    win = resolve_wid(app, window_title, pid=pid, window_id=window_id)
+    if win is None or win.get("pid") is None or win.get("wid") is None:
+        return result(False, "locate_fail", reason="target_missing_ambiguous_or_unidentified")
+    identity = {"pid": win["pid"], "window_id": win["wid"]}
+    base["target"] = identity
     if verify_visibility:
-        win = resolve_wid(app, window_title)
-        if win is None:
-            return {
-                "ok": False,
-                "stage": "locate_fail",
-                "via": "v2_ocr",
-                "elapsed_ms": (time.perf_counter() - t0) * 1000,
-                "reason": "target_not_visible",
-            }
         occ = occlusion_check(win["wid"], win["bounds"])
         if occ["occluded"]:
-            healed = None
-            if self_heal:
-                healed = _activate_and_recheck(app, window_title)
-            if healed is None:
-                return {
-                    "ok": False,
-                    "stage": "locate_fail",
-                    "via": "v2_ocr",
-                    "elapsed_ms": (time.perf_counter() - t0) * 1000,
-                    "reason": "target_occluded",
-                    "coverage_ratio": occ["coverage_ratio"],
-                    "occluders": occ["occluders"],
-                    "self_heal_attempted": self_heal,
-                }
-
-    # Capture
+            return result(False, "locate_fail", reason=occ.get("reason", "target_occluded"),
+                          coverage_ratio=occ["coverage_ratio"], occluders=occ["occluders"])
+    def capture():
+        return capture_window(app, window_title, pid=win["pid"], window_id=win["wid"])
     try:
-        before_png, meta_pre = capture_window(app, window_title)
-    except RuntimeError as e:
-        return {
-            "ok": False,
-            "stage": "locate_fail",
-            "via": "v2_ocr",
-            "elapsed_ms": (time.perf_counter() - t0) * 1000,
-            "reason": str(e),
-        }
-
-    # Downsample (if needed)
-    ocr_input, scale = maybe_downsample(before_png)
-    data.scale = scale
-    image_w_px = meta_pre["image_w_px"] // scale
-    image_h_px = meta_pre["image_h_px"] // scale
-
-    # OCR
-    hits, _, _ = ocr(ocr_input)
-    data.ocr_n_results = len(hits)
-
-    # Match
-    chosen, ambiguous = match(hits, desc)
-    data.ocr_n_candidates = 0 if chosen is None else 1 + len(ambiguous)
-    if chosen is None and ambiguous:
-        data.ambiguous = [
-            {
-                "text": h.text,
-                "confidence": round(h.confidence, 2),
-                "bbox_center_xy_px": (
-                    round(_center_xy_with_scale(h, image_w_px, image_h_px, scale)[0]),
-                    round(_center_xy_with_scale(h, image_w_px, image_h_px, scale)[1]),
-                ),
-            }
-            for h in ambiguous[:6]
-        ]
-        return {
-            "ok": False,
-            "stage": "ambiguous",
-            "via": "v2_ocr",
-            "elapsed_ms": (time.perf_counter() - t0) * 1000,
-            "ambiguous": data.ambiguous,
-            "ocr_n_results": data.ocr_n_candidates,
-        }
+        before_png, meta = capture()
+        ocr_input, scale = maybe_downsample(before_png)
+        hits, image_w, image_h = ocr(ocr_input)
+        chosen, ambiguous = match(hits, desc)
+    except Exception as exc:
+        return result(False, "locate_fail", reason="capture_or_ocr_unavailable", error=str(exc))
     if chosen is None:
-        return {
-            "ok": False,
-            "stage": "locate_fail",
-            "via": "v2_ocr",
-            "elapsed_ms": (time.perf_counter() - t0) * 1000,
-            "ocr_n_results": len(hits),
-            "desc": desc,
-        }
-
-    # Convert OCR-located center to original-screen-pixel coords
-    chosen.image_w_px = image_w_px
-    chosen.image_h_px = image_h_px
-    chosen.scale = scale
-    cx, cy = chosen.center_screen_px()
-    # Add the window origin offset (capture was window-relative; OCR is in
-    # image-local coords). Divide by the real backing scale factor (image px
-    # → screen points) — historically hardcoded /2, which silently mis-clicks
-    # on a non-Retina external display (scale 1.0). Default 2.0 preserves the
-    # old Retina behavior when the capture meta didn't record it.
-    backing = float(meta_pre.get("backing_scale", 2.0) or 2.0)
-    cx_screen = meta_pre["bounds"]["X"] + cx / backing
-    cy_screen = meta_pre["bounds"]["Y"] + cy / backing
-
-    data.chosen = {
-        "text": chosen.text,
-        "confidence": round(chosen.confidence, 2),
-        "exact": chosen.exact,
-        "click_xy": (round(cx_screen, 1), round(cy_screen, 1)),
-    }
-
-    # Click
-    if not click_at(cx_screen, cy_screen):
-        return {
-            "ok": False,
-            "stage": "act_fail",
-            "via": "v2_ocr",
-            "elapsed_ms": (time.perf_counter() - t0) * 1000,
-            "chosen": data.chosen,
-        }
-
-    # Verify via screen diff
-    time.sleep(DEFAULT_CLICK_VERIFY_POLL_MS / 1000.0)
+        return result(False, "ambiguous" if ambiguous else "locate_fail", reason="ambiguous" if ambiguous else "text_not_found",
+                      candidates=[{"text": hit.text, "confidence": hit.confidence} for hit in ambiguous])
+    chosen.image_w_px, chosen.image_h_px, chosen.scale = image_w, image_h, scale
+    x_px, y_px = chosen.center_screen_px()
+    backing = meta.get("backing_scale")
+    if not isinstance(backing, (int, float)) or backing <= 0:
+        return result(False, "locate_fail", reason="coordinate_scale_unavailable")
+    x = meta["bounds"]["X"] + x_px / backing
+    y = meta["bounds"]["Y"] + y_px / backing
+    live = resolve_wid(app, window_title, pid=win["pid"], window_id=win["wid"])
+    if live is None or live["bounds"] != meta["bounds"]:
+        return result(False, "locate_fail", reason="target_moved_or_closed")
+    safety = assert_click_target(app, x, y, app_window_bounds=meta["bounds"],
+                                 expected_pid=win["pid"], expected_window_id=win["wid"])
+    if not safety["ok"]:
+        return result(False, "locate_fail", reason=safety["reason"], click_safety=safety)
+    base["chosen"] = {"text": chosen.text, "click_xy": [x, y]}
     try:
-        after_png, _meta_post = capture_window(app, window_title)
-        verdict, distance = verify_via_diff(before_png, after_png)
+        accepted = click_at(x, y)
     except Exception:
-        verdict = "n/a"
-        distance = -1
+        accepted = False
+    base.update(dispatch_state="sent" if accepted else "unknown", dispatched=True if accepted else None,
+                retry_safe=False)
+    if not accepted:
+        return result(False, "act_fail", reason="outcome_unknown")
+    # Post-action reads may be repeated. The input is never repeated.
+    deadline = time.monotonic() + (verify.get("timeout_ms", 1000) / 1000 if verify else 0)
+    ui_changed = None
+    while True:
+        try:
+            after_png, after_meta = capture()
+            diff, _ = verify_via_diff(before_png, after_png)
+            ui_changed = {"yes": True, "no": False}.get(diff)
+            if verify:
+                current_hits, _, _ = ocr(after_png)
+                visible = [hit.text for hit in current_hits]
+                matched = (any(verify["contains"] in value for value in visible) if "contains" in verify
+                           else verify["equals"] in visible)
+                if matched:
+                    return result(True, "ok", outcome="verified", verified="yes", ui_changed=ui_changed,
+                                  verification={"verified": True, "condition": verify})
+        except Exception:
+            pass
+        if verify is None or time.monotonic() >= deadline:
+            break
+        time.sleep(0.05)
+    return result(verify is None, "verify_fail" if verify else "sent", verified="n/a",
+                  reason="outcome_unknown", ui_changed=ui_changed)
 
-    data.ssim = float(distance) if distance >= 0 else None
-    data.elapsed_ms = (time.perf_counter() - t0) * 1000
 
-    if verdict == "no":
-        # No visible change → likely stub no-op or click missed.
-        return {
-            "ok": True,
-            "verified": "no",
-            "stage": "verify_fail",
-            "via": "v2_ocr",
-            "elapsed_ms": data.elapsed_ms,
-            "chosen": data.chosen,
-            "hash_distance": data.ssim,
-        }
-    return {
-        "ok": True,
-        "verified": verdict,
-        "stage": "ok",
-        "via": "v2_ocr",
-        "elapsed_ms": data.elapsed_ms,
-        "chosen": data.chosen,
-        "hash_distance": data.ssim,
-    }
-
-
-def fill(
-    app: str,
-    desc: str,
-    text: str,
-    *,
-    window_title: Optional[str] = None,
-    verify_visibility: bool = True,
-    self_heal: bool = True,
-) -> dict[str, Any]:
-    """Fill an input located by its existing visible text (placeholder or
-    pre-filled value). Empty no-placeholder inputs can't be OCR-located
-    → ``locate_fail``; the caller (router) should route to AXValue or V4.
-    """
-    # In v2.0 we implement fill as "click the target desc, then type via
-    # Quartz keyboard". For minimum useful scope, we reuse click() to
-    # locate + verify the click, then send keystrokes. This won't work
-    # for the "empty no-placeholder input" case — caller must declare
-    # locate_fail accordingly.
-    click_result = click(
-        app, desc,
-        window_title=window_title,
-        verify_visibility=verify_visibility,
-        self_heal=self_heal,
-    )
-    if not click_result.get("ok"):
-        return click_result
-
-    # Type via Quartz keyboard (reuse _keyboard).
-    try:
-        from qcu.layers._keyboard import type_text
-
-        ok = type_text(text)
-    except Exception:
-        ok = False
-
-    return {
-        "ok": ok,
-        "verified": click_result.get("verified", "n/a"),
-        "stage": "ok" if ok else "act_fail",
-        "via": "v2_ocr",
-        "chosen": click_result.get("chosen"),
-        "elapsed_ms": click_result.get("elapsed_ms", 0),
-    }
+def fill(app: str, desc: str, text: str, *, window_title: Optional[str] = None,
+         verify_visibility: bool = True, self_heal: bool = False) -> dict[str, Any]:
+    """OCR cannot prove field focus or read its value; refuse before typing."""
+    return {"ok": False, "stage": "locate_fail", "via": "v2_ocr", "reason": "unsupported",
+            "message": "OCR fill cannot confirm target focus/value; use a semantic field ref",
+            "dispatch_state": "not_sent", "dispatched": False, "outcome": "unknown"}
 
 
 # ---------------------------------------------------------------------------

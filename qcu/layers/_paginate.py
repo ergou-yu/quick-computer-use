@@ -65,6 +65,10 @@ def apply_pagination_and_compact(
                 name=e.name,           # name/url usually what the LLM matches by
                 value=e.value if e.value else None,
                 bounds=e.bounds,
+                enabled=e.enabled,
+                focused=e.focused,
+                properties={k: v for k, v in e.properties.items()
+                            if k in {"checked", "selected", "expanded", "pressed", "readonly", "required"}},
             )
             for e in sliced
         ]

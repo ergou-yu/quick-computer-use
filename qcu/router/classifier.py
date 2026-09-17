@@ -53,7 +53,8 @@ def classify(
             matched = bool(cond(features))
         except Exception:
             matched = False
-        evaluated.append((priority, name, matched, layer, reason))
+        resolved_layer = layer(features) if callable(layer) else layer
+        evaluated.append((priority, name, matched, resolved_layer, reason))
 
     winner: Optional[tuple[int, str, bool, str, str]] = None
     for entry in evaluated:

@@ -12,7 +12,7 @@ They cover:
   - owner matches → ok
   - owner=飞书 ≠ Mirroria → ok=False with real owner named
   - point in no window → ok=False
-  - Quartz import fails → fail-open ok=True
+  - Quartz import fails → fail-closed ok=False
   - desktop_ax._click integration: wrong owner aborts before CGEvent fires
   - multi-window: a different app's overlapping window at the same point
     is reported as the wrong owner even when the target app also has a
@@ -85,6 +85,7 @@ def _install_fake_quartz(monkeypatch, windows, *, with_cgevents=False):
 def _win(owner, x, y, w, h, *, wid=1, layer=0, title="", alpha=1.0):
     return {
         "kCGWindowOwnerName": owner,
+        "kCGWindowOwnerPID": 42,
         "kCGWindowNumber": wid,
         "kCGWindowLayer": layer,
         "kCGWindowTitle": title,
@@ -165,12 +166,12 @@ def test_assert_point_in_no_window_aborts(monkeypatch):
     assert v["reason"] == "point_not_in_any_window"
 
 
-def test_assert_fail_open_when_quartz_missing(monkeypatch):
+def test_assert_fail_closed_when_quartz_missing(monkeypatch):
     # Force the import to fail: remove Quartz and make any import of it raise.
     monkeypatch.setitem(sys.modules, "Quartz", None)
     v = assert_click_target("Mirroria", 100, 200)
-    # fail-open: no Quartz → ok=True so we never brick clicks on non-macOS.
-    assert v["ok"] is True
+    # Missing ownership inspection must not authorize coordinate input.
+    assert v["ok"] is False
     assert v["reason"] == "safety_probe_unavailable"
 
 
@@ -210,6 +211,7 @@ def layer():
     L = desktop_ax.DesktopAXLayer()
     L._available = True
     L._cached_trusted = True
+    L._target_scope = {"pid": 42, "window_id": 20, "app": "Mirroria"}
     return L
 
 
@@ -378,3 +380,46 @@ def _shape(w):
     function test inputs without touching Quartz."""
     from qcu.layers._click_safety import _shape_window
     return _shape_window(w)
+
+
+def test_assert_window_probe_exception_fails_closed(monkeypatch):
+    fake = _install_fake_quartz(monkeypatch, [])
+    def denied(*args):
+        raise PermissionError("window enumeration denied")
+    fake.CGWindowListCopyWindowInfo = denied
+    result = assert_click_target("Target", 20, 20)
+    assert result["ok"] is False
+    assert result["reason"] == "safety_probe_unavailable"
+
+
+def test_assert_exact_window_rejects_same_app_other_window(monkeypatch):
+    _install_fake_quartz(monkeypatch, [_win("Target", 0, 0, 500, 500, wid=2)])
+    result = assert_click_target("Target", 20, 20, expected_window_id=1)
+    assert result["ok"] is False
+    assert result["reason"] == "wrong_window"
+
+
+def test_assert_process_identity_rejects_same_named_app(monkeypatch):
+    window = _win("Target", 0, 0, 500, 500)
+    window["kCGWindowOwnerPID"] = 222
+    _install_fake_quartz(monkeypatch, [window])
+    result = assert_click_target("Target", 20, 20, expected_pid=111)
+    assert result["ok"] is False
+    assert result["reason"] == "wrong_process"
+
+
+def test_assert_bound_window_rejects_same_app_overlay(monkeypatch):
+    _install_fake_quartz(monkeypatch, [
+        _win("Target", 0, 0, 100, 100, wid=2, layer=3),
+        _win("Target", 0, 0, 500, 500, wid=1),
+    ])
+    result = assert_click_target("Target", 20, 20, expected_window_id=1)
+    assert result["ok"] is False
+    assert result["reason"] == "occluded_by_overlay"
+
+
+def test_assert_missing_target_rejected(monkeypatch):
+    _install_fake_quartz(monkeypatch, [_win("Target", 0, 0, 100, 100)])
+    result = assert_click_target(None, 20, 20)
+    assert result["ok"] is False
+    assert result["reason"] == "target_unbound"

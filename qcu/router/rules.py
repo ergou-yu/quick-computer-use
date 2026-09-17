@@ -14,6 +14,7 @@ To add a rule: append it here, no other file needs to change.
 from __future__ import annotations
 
 from typing import Any, Callable
+from qcu.platforms import desktop_backend_name, platform_name
 
 
 Condition = Callable[[dict[str, Any]], bool]
@@ -87,7 +88,7 @@ _AE_CACHE: bool | None = None
 
 
 # (priority, name, condition, layer, reason)
-Rule = tuple[int, str, Condition, str, str]
+Rule = tuple[int, str, Condition, str | Callable[[dict[str, Any]], str], str]
 
 
 RULES: list[Rule] = [
@@ -138,76 +139,51 @@ RULES: list[Rule] = [
         "Web context; a11y tree available — fastest path.",
     ),
     # -----------------------------------------------------------------------
-    # Desktop path.
-    # -----------------------------------------------------------------------
-    # Two a11y backends on macOS. desktop_ax (Accessibility TCC) is the
-    # highest-quality path: native AXPress, AXShowMenu, real AXValue sets.
-    # desktop_appleevents (Apple Events via osascript) needs only the
-    # Automation TCC — the same one ZCode already has to talk to Finder — so
-    # it works on day one without toggling System Settings.
-    #
-    # AX-first, Apple Events second: when both are usable, AX wins because
-    # AXPress-style actions don't depend on positional path indices that
-    # could shift between observe() and act().
     (
-        66,
-        "desktop_webview_blind",
-        # Two triggers, OR'd:
-        #   (a) Desktop app embeds an opaque AXWebArea (WKWebView/Electron)
-        #       AND the AX tree has very few actable controls — i.e. the app
-        #       is essentially a web-view shell the desktop layers can't see
-        #       into. The ``n_interactive < 8`` guard keeps real AppKit apps
-        #       (dozens of actable controls) on the normal desktop_ax path.
-        #   (b) A full browser (Chrome/Safari/Edge/Arc) detected via Apple
-        #       Script tab probing (``has_web_app``). Stock Chrome does NOT
-        #       expose AXWebArea without AXManualAccessibility, so trigger
-        #       (a) never fires for it — yet its DOM is just as opaque. This
-        #       branch surfaces the T3 takeover hint for the
-        #       CRM-in-Chrome case the SKILL.md decision tree describes
-        #       (``web_app is not None → T3``).
-        # Sits ABOVE desktop_ax (65) so either case wins this branch; the
-        # layer stays desktop_ax so act() still works for the chrome
-        # controls (toolbar/omnibox), while the reason + alternatives tell
-        # the LLM to escalate to T3 (QCU's own Chromium) for DOM work.
-        lambda f: (
-            _f(f, "context") == "desktop"
-            and (
-                (bool(_f(f, "has_web_area"))
-                 and int(_f(f, "n_interactive", 0)) < 8)
-                or bool(_f(f, "has_web_app"))
-            )
-        ),
-        "desktop_ax",
-        "Desktop target has opaque web content (AXWebArea shell or a full "
-        "browser via web_app); AX/Apple Events cannot reach the DOM — "
-        "consider T3 web takeover (session start --context web + navigate).",
+        69, "desktop_registered",
+        lambda f: _f(f, "context") == "desktop" and desktop_backend_name(_f(f, "platform", platform_name()))
+        not in {"desktop_ax", "desktop_uia", "desktop_linux", "desktop_harmony", "desktop_unsupported"},
+        lambda f: desktop_backend_name(_f(f, "platform", platform_name())),
+        "Use the explicitly registered platform backend; it reports its own capabilities.",
+    ),
+    # Desktop selection follows the platform and observed backend. Missing
+    # access is reported by that backend; never reinterpret native refs on AE.
+    (
+        68, "desktop_uia",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_uia",
+        "desktop_uia", "Windows desktop target; use UIA semantic Patterns.",
     ),
     (
-        65,
-        "desktop_ax",
-        lambda f: _f(f, "context") == "desktop" and (_f(f, "ax_trusted", False) or _ax_actually_trusted()),
-        "desktop_ax",
-        "Desktop context with macOS AX trusted.",
+        68, "desktop_linux_unimplemented",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_linux",
+        "desktop_linux", "Linux desktop backend is not implemented.",
     ),
     (
-        60,
-        "desktop_appleevents",
-        # Apple Events path: works without Accessibility grant, covers ~every
-        # native + Electron app. Probe lazily so the rule only claims
-        # availability when osascript is on PATH and System Events responds.
-        lambda f: _f(f, "context") == "desktop" and not _ax_actually_trusted() and _appleevents_available(),
-        "desktop_appleevents",
-        "Desktop context; AX not granted, but Apple Events (Automation) path is usable.",
+        68, "desktop_harmony_unimplemented",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_harmony",
+        "desktop_harmony", "HarmonyOS desktop backend is not implemented.",
     ),
     (
-        55,
-        "desktop_no_ax",
-        # Only fall back to screenshot when BOTH a11y backends are unavailable.
-        # This is genuinely rare on macOS — Apple Events is granted as soon as
-        # the user authorizes ZCode to use Finder/TextEdit.
-        lambda f: _f(f, "context") == "desktop" and not _ax_actually_trusted() and not _appleevents_available(),
-        "screenshot_fallback",
-        "Desktop context but neither AX nor Apple Events is available — last resort only.",
+        67, "desktop_explicit_appleevents",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "observed_layer") == "desktop_appleevents"
+        and _f(f, "platform", platform_name()) == "darwin",
+        "desktop_appleevents", "Keep the explicitly observed Apple Events target.",
+    ),
+    (
+        66, "desktop_webview_blind",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_ax"
+        and ((_f(f, "has_web_area") and int(_f(f, "n_interactive", 0)) < 8) or _f(f, "has_web_app")),
+        "desktop_ax", "Bound macOS target contains opaque web content; report its missing read capability.",
+    ),
+    (
+        65, "desktop_ax",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_ax",
+        "desktop_ax", "macOS desktop target; keep AX scope and report missing permissions.",
+    ),
+    (
+        54, "desktop_unsupported",
+        lambda f: _f(f, "context") == "desktop",
+        "desktop_unsupported", "No implemented desktop backend is registered for this platform.",
     ),
     # -----------------------------------------------------------------------
     # Last-resort fallbacks.

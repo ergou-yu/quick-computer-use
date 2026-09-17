@@ -43,7 +43,7 @@ def launch_daemon(port: int, env: Optional[dict[str, str]] = None) -> int:
         "close_fds": True,
         "env": env or os.environ.copy(),
     }
-    if sys.platform == "win32":  # pragma: no cover — darwin first, win v2
+    if sys.platform == "win32":  # Windows process flags; exercised by platform contract tests
         popen_kwargs["creationflags"] = (
             getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             | getattr(subprocess, "DETACHED_PROCESS", 0)

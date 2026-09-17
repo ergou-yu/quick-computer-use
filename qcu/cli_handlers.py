@@ -24,7 +24,7 @@ from qcu.session import clear, load, new, status_dict
 # target app). These are the ones we route through the daemon when one is up.
 # Stateless/lightweight commands (schema, route, stats, --version) skip it.
 _DAEMON_METHODS = {
-    "observe", "act", "session_start", "session_status", "session_end",
+    "observe", "act", "batch", "session_start", "session_status", "session_end",
     "browser_status", "browser_stop",
 }
 
@@ -56,6 +56,10 @@ def _ensure_daemon_started() -> Optional[tuple[int, int]]:
     if os.environ.get("QCU_DAEMON_PROCESS") == "1":
         return None
     s = load()
+    if s is None:
+        # The first local operation creates the logical session. Launching a
+        # daemon before that would lose its pid/port when patch() has no target.
+        return None
     recorded_port = s.daemon_port if s is not None else None
     recorded_pid = s.daemon_pid if s is not None else None
     try:
@@ -95,24 +99,34 @@ def _maybe_route_via_daemon(method: str, params: dict[str, Any]) -> Optional[int
         return None
     try:
         resp = call_daemon(port, method, params, timeout=300.0)
-    except DaemonError:
-        # Daemon wedged or down — fall through to local execution.
+    except DaemonError as exc:
+        # After sending a request, a lost reply does not prove it failed.
+        # Replaying a click or a batch locally could duplicate its side effect.
+        if exc.dispatched:
+            print(json.dumps({"ok": False, "error": str(exc),
+                              "reason": "outcome_unknown", "retry_safe": False,
+                              "dispatch_state": "unknown", "outcome": "unknown"}), file=sys.stderr)
+            return 2
         return None
     if not resp.get("ok"):
         # Daemon-side handler error: surface it like a local error.
         print(
-            json.dumps({"ok": False, "error": resp.get("error", "daemon error")}),
+            json.dumps({"ok": False, "error": resp.get("error", "daemon error"),
+                        "dispatch_state": "unknown", "outcome": "unknown",
+                        "reason": "outcome_unknown", "retry_safe": False}),
             file=sys.stderr,
         )
         return 1
     result = resp.get("result")
+    if resp.get("stderr"):
+        print(resp["stderr"], end="", file=sys.stderr)
     if result is not None:
         # The handler's original stdout payload — print it unchanged so the
         # CLI's stdout contract is identical to local execution.
         if isinstance(result, str):
             print(result)
         else:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print(json.dumps(result, ensure_ascii=False, indent=None if params.get("compact") else 2))
     return int(resp.get("exit_code", 0))
 
 
@@ -281,17 +295,8 @@ def session_start(context: str, headless: Optional[bool] = None,
         layer = "web_a11y"
         resolved = "web"
     elif context == "desktop":
-        # Prefer the Apple Events path unless AX is genuinely trusted. AX
-        # (Accessibility TCC) gives higher-fidelity actions (AXPress, AXValue)
-        # but requires a manual toggle in System Settings; Apple Events just
-        # needs the Automation grant ZCode already has, so it works on day
-        # one. Router rules will upgrade to desktop_ax if the user grants it.
-        try:
-            from ApplicationServices import AXIsProcessTrusted
-            ax_trusted = bool(AXIsProcessTrusted())
-        except Exception:
-            ax_trusted = False
-        layer = "desktop_ax" if ax_trusted else "desktop_appleevents"
+        from qcu.platforms import desktop_backend_name
+        layer = desktop_backend_name()
         resolved = "desktop"
     else:
         print(
@@ -307,7 +312,7 @@ def session_start(context: str, headless: Optional[bool] = None,
     # NOT abort session creation — the report is attached to the response so
     # the caller can warn the user. Web sessions skip this entirely.
     perm_report: dict[str, Any] | None = None
-    if resolved == "desktop":
+    if resolved == "desktop" and sys.platform == "darwin":
         try:
             perm_report = permissions.probe_all()
             permissions.trigger_prompts_for_missing(perm_report)
@@ -353,6 +358,9 @@ def session_start(context: str, headless: Optional[bool] = None,
         "resumed": False,
         "session": status_dict(),
     }
+    if resolved == "desktop":
+        from qcu.layers.runtime import capability_report
+        payload["capabilities"] = capability_report()
     if perm_report is not None:
         payload["permissions"] = perm_report
     print(json.dumps(payload, ensure_ascii=False))
@@ -380,6 +388,9 @@ def session_end(purge_profile: bool = False) -> int:
     # disconnected; the browser would otherwise keep running headless forever.
     stopped = None
     s = load()
+    if s is not None and s.daemon_pid and s.daemon_pid != os.getpid():
+        from qcu.layers.browser_daemon import kill_pid
+        kill_pid(s.daemon_pid)
     if s is not None and s.browser_pid:
         try:
             from qcu.layers.browser_daemon import kill_pid
@@ -440,11 +451,28 @@ def observe(
     app: Optional[str] = None,
     pid: Optional[int] = None,
     window: Optional[str] = None,
+    wait_until: str = "domcontentloaded",
+    wait_for: Optional[str] = None,
+    timeout_ms: int = 3000,
 ) -> int:
-    # Route through the resident daemon when one is up: it keeps the browser/
-    # AX state warm, so this and the next `qcu act` reuse the same handles
-    # instead of each paying process-startup + re-attach cost, and (for
-    # desktop) the same target-app focus.
+    # Create the logical session BEFORE daemon startup. Native refs must be
+    # observed inside the persistent backend even on the first implicit start.
+    s = load()
+    desktop_scope = app is not None or pid is not None or window is not None
+    if s is None:
+        if desktop_scope or (layer and layer.startswith("desktop_")):
+            from qcu.platforms import desktop_backend_name
+            s = new(context="desktop", layer=layer or desktop_backend_name())
+        else:
+            s = new(context="web", layer="web_a11y")
+    chosen_layer = layer or s.layer
+    incompatible = ((s.context == "web" and (desktop_scope or chosen_layer.startswith("desktop_")))
+                    or (s.context == "desktop" and chosen_layer in {"web_a11y", "webmcp"}))
+    if incompatible:
+        print(json.dumps({"ok": False, "error": "Observation target conflicts with the active session; start the intended context explicitly",
+                          "reason": "target_mismatch", "context": s.context, "layer": chosen_layer}, ensure_ascii=False))
+        return 2
+
     _ensure_daemon_started()
     opts = {
         "layer": layer,
@@ -460,6 +488,9 @@ def observe(
         "app": app,
         "pid": pid,
         "window": window,
+        "wait_until": wait_until,
+        "wait_for": wait_for,
+        "timeout_ms": timeout_ms,
     }
     rc = _maybe_route_via_daemon("observe", opts)
     if rc is not None:
@@ -467,19 +498,6 @@ def observe(
 
     from qcu.layers.runtime import get_layer
 
-    s = load()
-    if s is None:
-        # Auto-start with web context — most common. EXCEPT when the caller
-        # explicitly scoped a desktop app (--app/--pid/--window): routing a
-        # "look at Calculator" observe to a blank web page returned 0 elements
-        # and confused every agent that forgot `session start --context
-        # desktop` first. Desktop scoping implies the desktop context.
-        if app or pid or window:
-            s = new(context="desktop", layer="desktop_ax")
-        else:
-            s = new(context="web", layer="web_a11y")
-
-    chosen_layer = layer or s.layer
     L = get_layer(chosen_layer)
     t0 = time.perf_counter()
     obs = L.observe(
@@ -495,49 +513,16 @@ def observe(
         app=app,
         pid=pid,
         window=window,
+        wait_until=wait_until,
+        wait_for=wait_for,
+        timeout_ms=timeout_ms,
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
-    # Run the router on what we just observed. If it disagrees with the
-    # layer we used AND the primary layer produced an empty / failed result
-    # (e.g. desktop without AX permission, or a page that is all <canvas>),
-    # retry once with the router's preferred layer so the caller gets
-    # *something* instead of a blank observation. This is the observe-time
-    # way the router's "hard override" rules (desktop_no_ax, canvas_target,
-    # default) actually take effect.
+    # A failed/empty observation is evidence about this target. Automatically
+    # changing layers could discard its window scope or launch another browser.
     feats = extract_features(obs)
     decision = classify(feats, last_action=None)
-    primary_failed = (
-        not obs.elements
-        and not obs.raw_tree
-        and not obs.screenshot_path
-        and decision.layer != chosen_layer
-    )
-    if primary_failed:
-        try:
-            L2 = get_layer(decision.layer)
-            t1 = time.perf_counter()
-            obs2 = L2.observe(
-                max_depth=max_depth,
-                full_text=full_text,
-                text_limit=text_limit if text_limit is not None else 80,
-                tail=tail,
-                limit=limit,
-                offset=offset,
-                compact=compact,
-                roles=role,
-                query=name,
-            )
-            elapsed_ms += (time.perf_counter() - t1) * 1000.0
-            # Only adopt the retry if it actually yielded content.
-            if obs2.elements or obs2.raw_tree or obs2.screenshot_path:
-                obs = obs2
-                chosen_layer = decision.layer
-                feats = extract_features(obs)
-                decision = classify(feats, last_action=None)
-        except Exception:
-            # Keep the original observation; don't fail the whole call.
-            pass
 
     Telemetry.record(
         context=obs.context,
@@ -553,13 +538,21 @@ def observe(
     payload["elapsed_ms"] = round(elapsed_ms, 2)
     payload["router_decision"] = decision.to_dict(compact=compact)
     payload["layer_used"] = chosen_layer
+    if compact:
+        # Serialize less, but retain false/zero states and routing diagnostics.
+        payload["elements"] = [
+            {k: v for k, v in e.items() if v is not None and v != {} and v != []
+             and k != "backend_id"}
+            for e in payload["elements"]
+        ]
+        payload = {k: v for k, v in payload.items() if k == "elements" or (v is not None and v != [])}
     # Surface a stderr hint when the observation hit a permission/availability
     # blocker — otherwise the agent sees an empty element list and gives up
     # (the Kimi field report). raw_tree already carries the preface; this is
     # the stderr companion for the local (non-daemon) path.
     _emit_observation_blocker_hint(payload)
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0
+    print(json.dumps(payload, ensure_ascii=False, indent=None if compact else 2))
+    return 2 if obs.routing_meta.get("error") else 0
 
 
 # ---------------------------------------------------------------------------
@@ -755,6 +748,29 @@ def act(action_json: str, layer: Optional[str]) -> int:
     # payment) was silently skipped.
     chosen_layer = layer or decision.layer or s.layer
 
+    # A ref identifies a control on the observed backend. Routing must never
+    # reinterpret it as a coordinate or move it to another control surface.
+    ref_keys = [key for key in ("ref", "ref_from", "ref_to") if key in action.params]
+    observed_layer = last_obs.routing_meta.get("layer") if last_obs else None
+    if ref_keys:
+        known = {entry.get("ref") for entry in (s.last_refs or [])}
+        invalid = any(action.params[key] not in known for key in ref_keys)
+        mismatch = bool(layer and observed_layer and layer != observed_layer)
+        if invalid or mismatch:
+            from qcu.common.types import LayerResult
+            failure = LayerResult(False, layer or s.layer, "reference target changed; observe again",
+                                  data={"reason": "stale_ref" if invalid else "target_mismatch"})
+            print(failure.to_json())
+            return 2
+        chosen_layer = observed_layer or s.layer
+
+    if (s.context == "desktop" and chosen_layer in {"web_a11y", "webmcp"}) or (
+        s.context == "web" and chosen_layer.startswith("desktop_")):
+        from qcu.common.types import LayerResult
+        print(LayerResult(False, chosen_layer, "layer conflicts with session target",
+                          data={"reason": "target_mismatch"}).to_json())
+        return 2
+
     # Session-level hard switch: --no-screenshot-fallback. When set, refuse any
     # action the router would route to screenshot_fallback rather than silently
     # degrading to vision. This is a TRUE opt-out (reject, not downgrade): the
@@ -777,14 +793,20 @@ def act(action_json: str, layer: Optional[str]) -> int:
             )
             return 2
 
-    L = get_layer(chosen_layer)
-
     t0 = time.perf_counter()
+    try:
+        L = get_layer(chosen_layer)
+    except Exception as e:
+        from qcu.common.types import LayerResult
+        print(LayerResult(False, chosen_layer, str(e), data={"reason": "backend_unavailable"}).to_json())
+        return 2
     try:
         result = L.act(action)
     except Exception as e:  # noqa: BLE001
         print(
-            json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}),
+            json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}",
+                        "dispatch_state": "unknown", "outcome": "unknown",
+                        "reason": "outcome_unknown", "retry_safe": False}),
             file=sys.stderr,
         )
         Telemetry.record(
@@ -826,6 +848,22 @@ def act(action_json: str, layer: Optional[str]) -> int:
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
+
+
+def batch(actions_json: str, layer: Optional[str] = None, *,
+          observe_after: bool = False, compact: bool = False) -> int:
+    from qcu.batch import parse_actions, execute
+    try:
+        actions = parse_actions(actions_json)
+    except (ValueError, TypeError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc), "executed": 0}), file=sys.stderr)
+        return 1
+    _ensure_daemon_started()
+    rc = _maybe_route_via_daemon("batch", {"actions": actions_json, "layer": layer,
+                                         "observe_after": observe_after, "compact": compact})
+    if rc is not None:
+        return rc
+    return execute(actions, layer=layer, observe_after=observe_after, compact=compact)
 
 
 def route(features_arg: str) -> int:
@@ -930,7 +968,9 @@ def doctor() -> int:
     an agent runs visible — previously both reported ``0.1.0`` while diverging
     in functionality (one had go_back/daemon, one didn't).
     """
-    report = permissions.probe_all()
+    from qcu.layers.runtime import capability_report
+    report = permissions.probe_all() if sys.platform == "darwin" else {}
+    report["_desktop_backend"] = capability_report()
     report["_install"] = _doctor_install_info()
     print(json.dumps(report, ensure_ascii=False, indent=2))
     _emit_missing_permission_hints(report)

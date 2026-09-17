@@ -248,7 +248,7 @@ def test_no_screenshot_fallback_refuses_router_choice(monkeypatch):
     import io, contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        rc = h.act('{"type":"click","params":{"ref":"ref_1"}}', layer=None)
+        rc = h.act('{"type":"click","params":{"x":10,"y":20}}', layer=None)
     out = buf.getvalue()
     assert rc == 2  # action-fail exit code
     assert "disabled by session flag" in out
@@ -287,7 +287,7 @@ def test_no_screenshot_fallback_not_enforced_when_disabled(monkeypatch):
     import io, contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        rc = h.act('{"type":"click","params":{"ref":"ref_1"}}', layer=None)
+        rc = h.act('{"type":"click","params":{"x":10,"y":20}}', layer=None)
     assert rc == 0
     assert '"ok": true' in buf.getvalue()
 
@@ -326,7 +326,7 @@ def test_explicit_layer_override_bypasses_flag(monkeypatch):
     import io, contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        rc = h.act('{"type":"click","params":{"ref":"ref_1"}}',
+        rc = h.act('{"type":"click","params":{"x":10,"y":20}}',
                    layer="screenshot_fallback")  # explicit override
     assert rc == 0
     assert '"ok": true' in buf.getvalue()

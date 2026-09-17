@@ -186,6 +186,8 @@ ACTION_TYPES = frozenset(
         "hover",
         "type",  # params: {text: str}  (types into currently focused element)
         "fill",  # params: {ref: str, text: str}
+        "toggle",  # params: {ref: str}; UIA TogglePattern
+        "select",  # params: {ref: str}; UIA SelectionItemPattern
         "press_key",  # params: {key: str}  (e.g. "Enter", "Tab", "Escape", "Cmd+Q")
         "scroll",  # params: {dx: int, dy: int}
         "navigate",  # params: {url: str}
@@ -230,7 +232,10 @@ class Action:
         d = json.loads(s)
         if not isinstance(d, dict) or "type" not in d:
             raise ValueError(f"Action JSON must be an object with 'type': got {d!r}")
-        return cls(type=d["type"], params=d.get("params") or {})
+        params = d.get("params", {})
+        if not isinstance(d["type"], str) or not isinstance(params, dict):
+            raise ValueError("Action type must be a string and params must be an object")
+        return cls(type=d["type"], params=params)
 
 
 # ---------------------------------------------------------------------------
@@ -240,15 +245,42 @@ class Action:
 
 @dataclass
 class LayerResult:
-    """Result returned by ``Layer.act``."""
+    """Dispatch and requested postcondition are independent facts.
+
+    ``ok`` retains the backend call's compatibility meaning. Only
+    ``outcome=verified`` establishes the requested postcondition; an old
+    ``effect_verified`` or AX tree change is merely UI evidence.
+    """
 
     ok: bool
     layer: str  # name of the layer that handled this action
     message: str = ""
     data: dict[str, Any] = field(default_factory=dict)
+    dispatch_state: Optional[str] = None  # not_sent | sent | unknown
+    outcome: str = "unknown"  # unknown | verified
+
+    def __post_init__(self) -> None:
+        if self.dispatch_state is None:
+            if self.data.get("dispatched") is True:
+                self.dispatch_state = "sent"
+            elif self.data.get("reason") == "outcome_unknown":
+                self.dispatch_state = "unknown"
+            elif self.data.get("dispatched") is False:
+                self.dispatch_state = "not_sent"
+            else:
+                self.dispatch_state = "sent" if self.ok else "not_sent"
+        if self.dispatch_state not in {"not_sent", "sent", "unknown"}:
+            raise ValueError("invalid dispatch_state")
+        if self.outcome not in {"unknown", "verified"}:
+            raise ValueError("invalid outcome")
+        if self.dispatch_state != "not_sent":
+            self.data["retry_safe"] = False
+        self.data.setdefault("dispatched", {"sent": True, "not_sent": False}.get(self.dispatch_state))
 
     def to_dict(self) -> dict[str, Any]:
-        return {"ok": self.ok, "layer": self.layer, "message": self.message, "data": self.data}
+        return {"ok": self.ok, "layer": self.layer, "message": self.message,
+                "data": self.data, "dispatch_state": self.dispatch_state,
+                "outcome": self.outcome}
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)

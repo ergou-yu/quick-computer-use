@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qcu"
-version = "1.6"
+version = "1.8"
 description = "Quick Computer Use — a faster computer-use skill that prefers a11y trees over screenshots"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,11 +16,11 @@ dependencies = [
 
 [project.optional-dependencies]
 macos = [
-    "pyobjc-framework-ApplicationServices>=10.0",
-    "pyobjc-framework-Quartz>=10.0",
+    "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
 ]
 windows = [
-    "uiautomation>=2.0",
+    "uiautomation>=2.0; sys_platform == 'win32'",
 ]
 dev = [
     "pytest>=8.0",
@@ -37,5 +37,6 @@ include = ["qcu*"]
 markers = [
     "integration: requires a real Chromium browser",
     "macos: requires macOS Accessibility permission",
+    "windows: requires a real Windows interactive desktop and UIA",
 ]
 testpaths = ["tests"]

@@ -129,7 +129,7 @@ def test_click_aborts_on_drift_in_strict_mode(layer, monkeypatch):
                                          "expected_foreground": "Finder"})
     monkeypatch.setattr("qcu.session.load", lambda: fake)
     monkeypatch.setattr(layer, "_frontmost_name", lambda: "飞书")  # drifted!
-    res = layer.act(Action(type="click", params={"ref": "ref_1"}))
+    res = layer.act(Action(type="click", params={"x": 1, "y": 1}))
     assert res.ok is False
     assert "drifted" in res.message
     assert "飞书" in res.message
@@ -144,7 +144,7 @@ def test_click_allowed_when_no_drift(layer, monkeypatch):
     # check. That proves the strict gate let it through.
     res = layer.act(Action(type="click", params={"ref": "ref_1"}))
     assert res.ok is False
-    assert "unknown ref" in res.message  # reached click logic, not blocked
+    assert res.data["reason"] == "legacy_ref_requires_observe"  # ref rejected, strict gate permits input
 
 
 def test_click_allowed_when_strict_disabled(layer, monkeypatch):

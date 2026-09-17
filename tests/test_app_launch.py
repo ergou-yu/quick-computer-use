@@ -157,9 +157,8 @@ def test_launch_app_background_degrades_to_launch_osascript(monkeypatch):
     )
 
 
-def test_launch_app_background_open_a_fallback_sets_focus_flag(monkeypatch):
-    """If both NSWorkspace and osascript-launch fail, fall back to ``open -a``
-    and mark the result as focus_disturbed so the caller can surface it."""
+def test_launch_app_background_script_failure_never_replays_open_a(monkeypatch):
+    """An attempted script may have launched; a second transport cannot retry."""
     import sys
 
     monkeypatch.setitem(sys.modules, "AppKit", None)
@@ -172,13 +171,15 @@ def test_launch_app_background_open_a_fallback_sets_focus_flag(monkeypatch):
         stderr = "app not found"
     monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: _RFail())
 
-    # ``open -a`` succeeds (Popen doesn't matter — it's launched detached).
-    monkeypatch.setattr(mod.subprocess, "Popen", lambda *a, **k: None)
+    def forbid(*a, **k):
+        raise AssertionError("uncertain script must not launch through open -a")
+    monkeypatch.setattr(mod.subprocess, "Popen", forbid)
 
-    ok, msg, focus = mod.launch_app_background("NonexistentApp")
-    assert ok is True
-    assert focus is True  # this is the whole point — caller knows focus moved
-    assert "foreground" in msg or "focus disturbed" in msg.lower()
+    result = mod.launch_app_background("NonexistentApp")
+    ok, msg, focus = result
+    assert ok is False and focus is False
+    assert result.dispatch_state == "unknown"
+    assert "unknown" in msg
 
 
 def test_launch_app_background_all_paths_fail(monkeypatch):
@@ -330,3 +331,48 @@ def test_app_url_by_name_prefers_applications_over_build_clone(monkeypatch):
     url = mod._app_url_by_name(None, "Mirroria")
     assert url == "file:///Applications/Mirroria.app/"
     assert captured["path"] == "/Applications/Mirroria.app"
+
+
+@pytest.mark.parametrize('native_result', [(None, 'lost reply'), RuntimeError('lost reply')])
+def test_attempted_native_launch_never_tries_another_transport(monkeypatch, native_result):
+    import sys
+    from types import SimpleNamespace
+    calls = []
+    def launch(*args):
+        calls.append(args)
+        if isinstance(native_result, Exception):
+            raise native_result
+        return native_result
+    workspace = SimpleNamespace(launchApplicationAtURL_options_configuration_error_=launch)
+    monkeypatch.setitem(sys.modules, 'AppKit', SimpleNamespace(NSWorkspace=SimpleNamespace(sharedWorkspace=lambda: workspace)))
+    monkeypatch.setattr(mod, '_app_url_by_name', lambda *a: 'fixture-url')
+    def forbid(*a, **kw):
+        raise AssertionError('native launch cannot replay using another transport')
+    monkeypatch.setattr(mod.subprocess, 'run', forbid)
+    monkeypatch.setattr(mod.subprocess, 'Popen', forbid)
+    result = mod.launch_app_background('/tmp/Fixture.app')
+    assert result[0] is False and result.dispatch_state == 'unknown'
+    assert len(calls) == 1
+
+
+def test_launch_no_transport_reports_not_sent(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, 'AppKit', None)
+    def missing(*a, **kw):
+        raise FileNotFoundError('osascript')
+    monkeypatch.setattr(mod.subprocess, 'run', missing)
+    result = mod.launch_app_background('Fixture')
+    assert not result[0] and result.dispatch_state == 'not_sent'
+
+
+def test_launch_script_timeout_never_replays(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, 'AppKit', None)
+    calls = []
+    def timeout(*a, **kw):
+        calls.append(a)
+        raise mod.subprocess.TimeoutExpired('osascript', 5)
+    monkeypatch.setattr(mod.subprocess, 'run', timeout)
+    result = mod.launch_app_background('Fixture')
+    assert not result[0] and result.dispatch_state == 'unknown'
+    assert len(calls) == 1

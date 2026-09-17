@@ -83,7 +83,10 @@ def test_resolve_point_explicit_coords(layer):
     assert (x, y, ref) == (10.0, 20.0, None)
 
 
-def test_resolve_point_ref_fallback(layer):
+def test_resolve_point_ref_fallback(layer, monkeypatch):
+    # Endpoint parsing is isolated from native identity validation.
+    monkeypatch.setattr(layer, "_resolve_ax_element", lambda ref: object())
+    monkeypatch.setattr(layer, "_live_point", lambda elem: (100.0, 200.0))
     layer._last_refs["ref_3"] = {"cx": 100.0, "cy": 200.0}
     x, y, ref = layer._resolve_point({"ref_from": "ref_3"}, "x1", "y1", "ref_from")
     assert (x, y, ref) == (100.0, 200.0, "ref_3")
@@ -130,7 +133,10 @@ def test_drag_flat_coords_dispatches_events(layer, monkeypatch):
     monkeypatch.setattr(cg, "CGEventCreateMouseEvent", lambda *a, **kw: object(), raising=False)
     monkeypatch.setattr(cg, "CGEventPost", fake_post, raising=False)
 
+    checked = []
+    monkeypatch.setattr(layer, "_assert_click_target_for", lambda x,y,ref=None: checked.append((x,y)) or {"ok": True})
     res = layer._drag({"x1": 0, "y1": 0, "x2": 100, "y2": 0, "duration": 0.0, "steps": 5})
+    assert checked == [(0.0,0.0),(100.0,0.0)]
     assert res.ok is True
     # 1 initial move + 1 down + 5 drag steps + 1 up = 8 events.
     assert len(events) == 8
@@ -153,6 +159,8 @@ def test_drag_ref_source_verification_yes(layer, monkeypatch):
     # _resolve_ax_element returns our fake handle.
     monkeypatch.setattr(layer, "_resolve_ax_element", lambda ref: fake_elem)
 
+    monkeypatch.setattr(layer, "_live_point", lambda elem: (0.0, 0.0))
+
     # _ax_get returns a "position" that moved from (0,0) to (50,0) → moved 50px.
     class _P:
         x = 50.0
@@ -165,6 +173,7 @@ def test_drag_ref_source_verification_yes(layer, monkeypatch):
         return (-1, None)
     monkeypatch.setattr(mod, "_ax_get", fake_ax_get)
 
+    monkeypatch.setattr(layer, "_assert_click_target_for", lambda *a: {"ok": True})
     res = layer._drag({"ref_from": "ref_src", "x2": 50, "y2": 0,
                        "duration": 0.0, "steps": 2})
     assert res.ok is True

@@ -284,13 +284,15 @@ class TestCrossProcessFormPersistence:
         try:
             # Load a page with a persistent text input.
             proc_a.observe()  # forces _ensure_browser → launches daemon
-            proc_a.act(Action(type="navigate", params={"url": "https://www.wikipedia.org"}))
+            fixture = tmp_path / "form.html"
+            fixture.write_text('<title>QCU disposable form</title><input type="search" aria-label="Search fixture">')
+            proc_a.act(Action(type="navigate", params={"url": fixture.as_uri()}))
             obs = proc_a.observe()
             search = next(
                 (e for e in obs.elements if e.role == "searchbox"), None
             )
             if search is None:
-                pytest.skip("wikipedia search box role not surfaced in this build")
+                pytest.fail("local search box was not surfaced")
             # Fill in "process A".
             r = proc_a.act(
                 Action(type="fill", params={"ref": search.ref, "text": "Alan Turing"})
@@ -300,7 +302,7 @@ class TestCrossProcessFormPersistence:
             # Close process A's connection (must NOT kill the daemon).
             proc_a.close()
         finally:
-            pass  # cleanup at end
+            proc_a.close()
 
         # "Process B": a brand-new layer instance attaching to the SAME daemon.
         proc_b = WebA11yLayer()
@@ -318,6 +320,7 @@ class TestCrossProcessFormPersistence:
             )
         finally:
             # Stop the daemon explicitly (session end semantics).
+            proc_b.close()
             from qcu.session import load
 
             s = load()

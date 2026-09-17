@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import sys
 import tempfile
 import time
 import uuid
@@ -240,7 +241,8 @@ def record_observation(
         s.last_observation = observation
         s.last_refs = refs
         s.status = "page_ready"
-        s.browser_status = "running"
+        if s.context == "web":
+            s.browser_status = "running"
 
     session, _ = update(apply)
     return session
@@ -268,6 +270,10 @@ def invalidate_observation(*, current_url: Optional[str] = None, document_change
 
 
 def is_alive(session: Session) -> bool:
+    if sys.platform == "win32":
+        # Windows os.kill(pid, 0) uses TerminateProcess; it is not a probe.
+        from qcu.layers.browser_daemon import is_pid_alive
+        return is_pid_alive(session.pid)
     try:
         os.kill(session.pid, 0)
         return True

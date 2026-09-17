@@ -1,0 +1,5 @@
+include SKILL.md CHANGELOG.md INSTALL.md
+recursive-include references *.md
+recursive-include examples *.py
+recursive-include tests *.py
+include scripts/qcu scripts/benchmark_ui.py scripts/verify_macos_ax.py scripts/verify_windows_uia.py

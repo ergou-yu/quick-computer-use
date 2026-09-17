@@ -178,8 +178,8 @@ def test_occlusion_zero_size_target(fake_quartz):
     assert res["reason"] == "target_zero_size"
 
 
-def test_occlusion_skips_non_layer0_window(fake_quartz):
-    # Menu-bar / overlay-layer windows don't occlude usable app windows.
+def test_occlusion_includes_non_layer0_window(fake_quartz):
+    # Floating overlays can obscure the target window.
     target = _win(100, "TextEdit", 100, 100, 600, 400)
     fake_quartz.extend([
         _win(1, "MenuBar", 0, 0, 1728, 25, layer=25),  # menubar layer
@@ -187,8 +187,8 @@ def test_occlusion_skips_non_layer0_window(fake_quartz):
         target,
     ])
     res = occlusion_check(100, target["kCGWindowBounds"])
-    assert res["occluded"] is False
-    assert res["occluders"] == []
+    assert res["occluded"] is True
+    assert res["occluders"][0]["owner"] == "FullscreenOverlay"
 
 
 def test_occlusion_skips_transparent_window(fake_quartz):
@@ -399,3 +399,88 @@ def test_backing_scale_retina_on_main_screen(monkeypatch):
     sys.modules["AppKit"].NSScreen = _FakeNSScreen
     s = _vision._backing_scale_for_bounds({"X": 100, "Y": 100, "Width": 800, "Height": 600})
     assert s == 2.0
+
+
+def test_resolve_wid_ambiguous_windows_are_not_arbitrarily_chosen(fake_quartz):
+    fake_quartz.extend([
+        _win(1, "Test", 0, 0, 100, 100, title="Document A"),
+        _win(2, "Test", 100, 0, 100, 100, title="Document B"),
+    ])
+    assert _vision.resolve_wid("Test", "Document") is None
+    assert _vision.resolve_wid("Test", window_id=2)["wid"] == 2
+    assert _vision.resolve_wid("Test", "Missing") is None
+
+
+def test_occlusion_probe_missing_fails_closed(monkeypatch):
+    monkeypatch.setitem(sys.modules, "Quartz", None)
+    result = _vision.occlusion_check(1, {"X": 0, "Y": 0, "Width": 100, "Height": 100})
+    assert result["occluded"] and result["reason"] == "quartz_unavailable"
+
+
+@pytest.fixture
+def ocr_dispatch(monkeypatch):
+    from qcu.layers import _click_safety
+    bounds = {"X": 100, "Y": 200, "Width": 200, "Height": 100}
+    win = {"wid": 1, "pid": 2, "bounds": bounds}
+    meta = {**win, "image_w_px": 400, "image_h_px": 200, "backing_scale": 2}
+    state = {"calls": [], "accepted": True, "diff": "yes", "reads": 0, "capture_targets": []}
+    monkeypatch.setattr(_vision, "resolve_wid", lambda *a, **k: win)
+    monkeypatch.setattr(_vision, "occlusion_check", lambda *a: {"occluded": False})
+    def capture(*args, **kwargs):
+        state["capture_targets"].append(kwargs)
+        return b"png", meta
+    monkeypatch.setattr(_vision, "capture_window", capture)
+    monkeypatch.setattr(_vision, "maybe_downsample", lambda png: (png, 1))
+    def ocr(png):
+        state["reads"] += 1
+        return [_hit("Save"), _hit("Saved 1")], 400, 200
+    monkeypatch.setattr(_vision, "ocr", ocr)
+    monkeypatch.setattr(_click_safety, "assert_click_target", lambda *a, **k: {"ok": True})
+    def dispatch(x, y):
+        state["calls"].append((x, y))
+        return state["accepted"]
+    monkeypatch.setattr(_vision, "click_at", dispatch)
+    monkeypatch.setattr(_vision, "verify_via_diff", lambda *a: (state["diff"], 100))
+    return state
+
+
+def test_ocr_changed_image_does_not_claim_task_verified(ocr_dispatch):
+    result = _vision.click("Test", "Save")
+    assert result["dispatch_state"] == "sent"
+    assert result["outcome"] == "unknown" and result["ui_changed"] is True
+    assert result["retry_safe"] is False and len(ocr_dispatch["calls"]) == 1
+    assert all(scope == {"pid": 2, "window_id": 1} for scope in ocr_dispatch["capture_targets"])
+
+
+def test_ocr_transport_uncertainty_stops_without_replay(ocr_dispatch):
+    ocr_dispatch["accepted"] = False
+    result = _vision.click("Test", "Save")
+    assert result["dispatch_state"] == "unknown" and result["reason"] == "outcome_unknown"
+    assert result["retry_safe"] is False and len(ocr_dispatch["calls"]) == 1
+
+
+def test_ocr_missing_postcondition_stops_without_replay(ocr_dispatch):
+    result = _vision.click("Test", "Save", verify={"kind": "text", "equals": "Missing", "timeout_ms": 0})
+    assert result["ok"] is False and result["outcome"] == "unknown"
+    assert result["dispatch_state"] == "sent" and len(ocr_dispatch["calls"]) == 1
+
+
+def test_ocr_explicit_text_postcondition_can_be_verified(ocr_dispatch):
+    result = _vision.click("Test", "Save", verify={"kind": "text", "equals": "Saved 1", "timeout_ms": 0})
+    assert result["ok"] is True and result["outcome"] == "verified"
+    assert result["verification"]["condition"]["equals"] == "Saved 1"
+    assert len(ocr_dispatch["calls"]) == 1
+
+
+def test_ocr_coordinate_gate_unavailable_sends_nothing(ocr_dispatch, monkeypatch):
+    from qcu.layers import _click_safety
+    monkeypatch.setattr(_click_safety, "assert_click_target", lambda *a, **k:
+                        {"ok": False, "reason": "safety_probe_unavailable"})
+    result = _vision.click("Test", "Save", verify_visibility=False)
+    assert result["dispatch_state"] == "not_sent" and not ocr_dispatch["calls"]
+
+
+def test_ocr_fill_does_not_type_after_unverified_focus(monkeypatch):
+    monkeypatch.setattr(_vision, "click", lambda *a, **k: pytest.fail("must refuse before input"))
+    result = _vision.fill("Test", "Field", "sensitive text")
+    assert result["dispatch_state"] == "not_sent" and result["reason"] == "unsupported"

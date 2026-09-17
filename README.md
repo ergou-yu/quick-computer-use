@@ -1,82 +1,100 @@
 # QCU — Quick Computer Use
 
-A faster computer-use skill that prefers the **accessibility tree** over
-screenshots. Targets a 5–20× latency reduction per step on typical web
-tasks compared to vision-based agents.
-
-> **Status:** MVP skeleton. Web + macOS desktop work; Windows desktop and
-> the grounding model are interface-only stubs. WebMCP detection is wired
-> up but currently always falls through, because `navigator.modelContext`
-> isn't shipped in any production browser yet.
-
-## What's in the box
-
-- **`web_a11y`** — Playwright + CDP. `Accessibility.getFullAXTree` →
-  `DOM.getBoxModel` for geometry → `data-llm-ref` injected into the DOM
-  for stable, ref-based actions.
-- **`webmcp`** — `navigator.modelContext` probe + adapter. Future-proofs
-  the system; silent fallback today.
-- **`desktop_ax`** — macOS PyObjC. Walks `AXUIElementRef` tree, clicks via
-  `Quartz.CoreGraphics`. Honors Accessibility permission state.
-- **`desktop_uia`** — Windows stub (Protocol + `uiautomation` hook).
-- **`screenshot_fallback`** — last-resort. Borrows the active browser/AX
-  handle, calls a registered grounding model (interface only).
-- **Router** — priority chain of rules, every decision logged to
-  `~/.qcu/telemetry.jsonl` for future ML training.
-- **CLI** — `qcu session / observe / act / route / stats / schema`.
+**1.8.** QCU controls an explicitly selected browser page or
+desktop window with accessibility references. This revision binds references to
+a backend lifetime, target and observation; separates dispatch from verified
+results; and adds a minimal Windows UI Automation backend. **Windows 真机未验证.**
 
 ## Install
 
-```bash
-git clone <repo> qcu
-cd qcu
-pip install -e ".[macos,dev]"            # or "[windows,dev]" or just ".[dev]"
-python3 -m playwright install chromium   # or use the cached binary at
-                                        # ~/Library/Caches/ms-playwright/
-```
-
-## Try it
+Python 3.11+:
 
 ```bash
-# 1. See the router think:
-python3 examples/demo_router.py
-
-# 2. Hit a real page (requires Playwright):
-python3 examples/demo_web_skeleton.py https://example.com
-
-# 3. Run unit tests:
-pytest tests/
-
-# 4. Run a full session — each `qcu` invocation is a fresh process;
-#    state (current URL, cached refs, browser profile) lives in ~/.qcu/.
-./scripts/qcu session start --context web
-./scripts/qcu act '{"type":"navigate","params":{"url":"https://example.com"}}'
-./scripts/qcu observe | python3 -c "import json,sys;d=json.load(sys.stdin);print('elements:',len(d['elements']))"
-./scripts/qcu act '{"type":"click","params":{"ref":"ref_0"}}'
-./scripts/qcu session end
+python -m pip install -e '.[dev]'        # web / development
+python -m playwright install chromium   # web only
+python -m pip install -e '.[macos,dev]'  # macOS AX
 ```
 
-## Why this is faster than vision-only
+On Windows PowerShell:
 
-| Path                              | Cost per action                |
-|-----------------------------------|--------------------------------|
-| Vision (screenshot → VLM → click) | encode PNG + ~1k-token forward pass + post-hoc OCR |
-| **a11y tree → text LLM → ref click** | tens of KB of structured text + ~100-token forward pass + direct locator |
+```powershell
+py -m pip install -e ".[windows,dev]"
+py scripts/verify_windows_uia.py
+```
 
-For tasks where the a11y tree is rich (most modern web apps), this is a
-**5–20× per-action speedup** and dramatically reduces the cost of
-multi-step flows. The router only pays the vision cost when the a11y
-tree is blind (canvas/WebGL, missing ref, critical-action confirmation).
+Platform extras use environment markers. Web/macOS installations do not import
+or install Windows UIA dependencies. See [INSTALL.md](INSTALL.md).
 
-## Roadmap
+## Target → observe → act → verify
 
-- [ ] Replace the rule chain with a learned classifier trained on
-  `telemetry.jsonl` (logistic regression → small MLP → tiny transformer).
-- [ ] Real key/keycode mapping for `press_key` / `type` on macOS.
-- [ ] Implement `desktop_uia` against `uiautomation`.
-- [ ] Pluggable grounding models: OmniParser, Florence-2, Set-of-Mark.
-- [ ] MCP server shim so the agent can call `mcp__qcu__observe/act`
-      directly instead of via bash.
+```bash
+qcu session start --context desktop
+qcu observe --pid 12345 --window 'Fixture window' --compact
+# Copy opaque refs from this observation. Example placeholder:
+qcu act '{"type":"click","params":{"ref":"<returned-ref>","verify":{"kind":"text","equals":"Saved 1"}}}'
+qcu session end
+```
 
-See `SKILL.md` for the agent-facing contract and `references/` for deep
-dives on routing, the API, and desktop permission setup.
+For web use `session start --context web`, navigate, then observe. QCU Chromium
+has its own profile; it does not inherit the user's open authenticated tab.
+Preserve the selected target. Tests must use an independent `QCU_HOME`.
+
+- Explicit missing or ambiguous windows fail with diagnostics/candidates.
+- `routing_meta.target` identifies the app/window or browser tab.
+- Re-observe after a backend restart, target change or invalid reference. Old
+  numeric and `obs_N:ref_M` tokens are not upgraded into new control identities.
+- Ref actions never become cached-coordinate actions. Coordinate/OCR paths must
+  establish the same target; unavailable inspection stops them.
+- A successful call or changed interface is distinct from the requested result.
+  Only `outcome: verified` confirms the specified postcondition.
+- `batch` permits 1–32 actions, fills before one final action, and stops on
+  failure **or unknown outcome**. `executed` counts attempted steps. Provide a
+  `verify` condition for the final click if batch success requires its result.
+
+## Platform coverage
+
+| Platform | Backend | Scope |
+|---|---|---|
+| macOS | `desktop_ax` | AX controls/actions, bounded window capture and safety checks |
+| Windows | `desktop_uia` | Minimal Invoke/Value/Toggle/SelectionItem; mock contracts and a live validation script; **real Windows unverified** |
+| Linux | `desktop_linux` | Explicitly not implemented; registration extension point |
+| HarmonyOS | `desktop_harmony` | Explicitly not implemented; registration extension point |
+
+Apple Events is an explicit **read-only legacy observer** in this preview; its
+positional action references cannot meet the new control guarantees. Start AX
+observation to obtain actionable refs. General icon/template/VLM grounding,
+Windows screenshots/keyboard input and Linux/HarmonyOS desktop control are not
+implemented. No paid visual service is required.
+
+## Verification and migration
+
+```json
+{"type":"fill","params":{"ref":"<field-ref>","text":"Example"}}
+{"type":"toggle","params":{"ref":"<UIA-toggle-ref>","verify":{"kind":"checked","ref":"<UIA-toggle-ref>","equals":true}}}
+{"type":"click","params":{"ref":"<button-ref>","verify":{"kind":"text","contains":"Saved","timeout_ms":1500}}}
+```
+
+Field fills read back values. UIA selection reads selected state; a raw Toggle
+is sent once and needs an explicit desired-state condition. No verification
+failure, timeout or lost response causes automatic re-send or transport switch.
+See [API](references/api.md), [desktop](references/desktop.md),
+[routing](references/routing.md), and [SKILL.md](SKILL.md).
+
+The major preview version reflects stricter contracts: refresh all refs, read
+`dispatch_state`/`outcome`, add final-action batch conditions, and migrate Apple
+Events actions to AX. `strict_ref` remains accepted; safe ref behavior is now
+the default for all web ref actions.
+
+## Tests
+
+```bash
+QCU_HOME="$(mktemp -d)" python -m pytest -q
+python scripts/verify_macos_ax.py --output macos-ax-result.json
+python scripts/verify_windows_uia.py
+python scripts/benchmark_ui.py --mode batch --rounds 2 --output result.json
+```
+
+The live scripts create disposable native windows. Chromium tests use temporary
+profiles/pages. Mock tests do not establish Windows interoperability, provider
+behavior, privileges or COM compatibility on real hardware. No universal speed
+advantage or complete platform support is claimed.

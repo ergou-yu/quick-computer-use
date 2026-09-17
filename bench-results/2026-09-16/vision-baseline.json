@@ -1,0 +1,24 @@
+{
+  "capture_fullscreen": {
+    "n": 5,
+    "p50_ms": 14.834083034656942,
+    "encode_p50_ms": 116.38583394233137,
+    "png_bytes_p50": 3335570,
+    "screen": "3456x2234"
+  },
+  "ocr_vision_accurate": {
+    "n": 5,
+    "ok": true,
+    "p50_ms": 332.0993339875713,
+    "strings_p50": 46
+  },
+  "ocr_vision_fast": {
+    "n": 5,
+    "p50_ms": 123.83520894218236
+  },
+  "capture_window_only": {
+    "n": 5,
+    "p50_ms": 46.18008295074105,
+    "png_bytes_p50": 142663
+  }
+}

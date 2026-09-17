@@ -154,11 +154,9 @@ def test_classify_desktop_with_ax_picks_desktop_ax():
     assert d.layer == "desktop_ax"
 
 
-def test_classify_desktop_no_ax_picks_apple_events(monkeypatch):
-    # When macOS AX permission is missing, the router must NOT degrade to
-    # screenshot. It should pick desktop_appleevents (the zero-toggle Apple
-    # Events fallback) when osascript is available. Mock both probes so the
-    # decision is deterministic on machines that have granted AX/Apple Events.
+def test_classify_desktop_no_ax_keeps_bound_ax(monkeypatch):
+    # Missing permissions are reported by the bound AX backend; they cannot
+    # authorize switching its refs/target to Apple Events.
     from qcu.router import rules
     monkeypatch.setattr(rules, "_ax_actually_trusted", lambda: False)
     monkeypatch.setattr(rules, "_appleevents_available", lambda: True)
@@ -166,12 +164,11 @@ def test_classify_desktop_no_ax_picks_apple_events(monkeypatch):
     feats = extract(obs)
     feats["ax_trusted"] = False
     d = classify(feats)
-    assert d.layer == "desktop_appleevents"
+    assert d.layer == "desktop_ax"
 
 
-def test_classify_desktop_no_ax_no_apple_events_picks_screenshot(monkeypatch):
-    # Truly last-resort: only when BOTH AX and Apple Events are unavailable
-    # does the router fall through to screenshot_fallback.
+def test_classify_desktop_no_ax_no_apple_events_keeps_target(monkeypatch):
+    # Missing access must retain the same target/backend and report capability.
     from qcu.router import rules
     monkeypatch.setattr(rules, "_ax_actually_trusted", lambda: False)
     monkeypatch.setattr(rules, "_appleevents_available", lambda: False)
@@ -179,7 +176,7 @@ def test_classify_desktop_no_ax_no_apple_events_picks_screenshot(monkeypatch):
     feats = extract(obs)
     feats["ax_trusted"] = False
     d = classify(feats)
-    assert d.layer == "screenshot_fallback"
+    assert d.layer == "desktop_ax"
 
 
 def test_classify_desktop_with_ax_never_falls_back_even_without_feature(monkeypatch):

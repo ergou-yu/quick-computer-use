@@ -1,158 +1,136 @@
-# Desktop (macOS permissions) setup
+# Desktop backends — 1.8
 
-The macOS path uses Apple's Accessibility API (`AXUIElementRef` etc.)
-through PyObjC, plus `CGEvent*` for input synthesis and
-`CGWindowListCreateImage` for screenshots. It needs **explicit user
-consent** on every Mac since 10.14 Mojave. Without the relevant grants,
-calls fail and the router falls back to the (much slower, less accurate)
-screenshot layer.
+Desktop selects the current platform: macOS AX, Windows UIA, or an explicit
+unimplemented Linux/HarmonyOS backend. It never defaults to macOS on Windows.
+The common Layer/Observation/Action/LayerResult contracts are shared with web.
 
-## The three TCC permissions you need
+## Capability report
 
-Modern macOS (Catalina+; **especially Sequoia / Tahoe / darwin 23+**)
-splits desktop automation consent across **three separate** TCC
-services. Granting one does NOT cover the others — this is the root
-cause of "QCU keeps asking for more permissions mid-task":
+`doctor`, desktop session start, and native observations publish capability
+reports. Preflight and target probes have different evidence:
 
-| Permission | What uses it | When QCU hits it |
-|---|---|---|
-| **Accessibility** | `AXUIElement*`, `CGEventCreate*` mouse/keys | first `observe` / click / `press_key` |
-| **Input Monitoring** | `CGEventPost` keystroke synthesis | first `press_key` / `fill` (Sequoia+ split it out from Accessibility; AX alone will NOT satisfy it) |
-| **Screen Recording** | `CGWindowListCreateImage` | first `screenshot`, or whenever the router falls back to the screenshot layer |
-
-> ⚠ **Screen Recording grants only take effect after the QCU process is
-> restarted.** After approving it, run `qcu session end` and then
-> `qcu session start --context desktop` again. This is an Apple
-> limitation; there is no way around it.
-
-## One-time setup
-
-1. **Install the Python extras** (the macOS path needs these):
-
-   ```bash
-   pip install -e ".[macos]"
-   ```
-
-   This adds `pyobjc-framework-ApplicationServices` and
-   `pyobjc-framework-Quartz`. There is **no** PyPI package for IOKit
-   bindings — the Input Monitoring probe reaches IOKit via `ctypes`
-   against `/System/Library/Frameworks/IOKit.framework`, so no extra
-   install is needed for that.
-
-2. **Probe what's missing** (prints a JSON report for all three):
-
-   ```bash
-   qcu doctor
-   ```
-
-   For each missing permission it also prints an `open '...'` hint to
-   stderr and attempts to open the relevant Privacy pane directly.
-
-3. **Grant everything up front with `session start`** — starting a
-   desktop session runs a permission preflight and surfaces the macOS
-   consent dialogs for anything missing, **before** the task loop runs,
-   so `observe` / `act` / `screenshot` / `press_key` are not interrupted
-   by separate prompts:
-
-   ```bash
-   qcu session start --context desktop
-   ```
-
-   The response JSON carries a `permissions` block:
-
-   ```json
-   {"ok": true, "resumed": false, "session": {...},
-    "permissions": {
-      "accessibility":     {"granted": true,  "url": "...Privacy_Accessibility"},
-      "input_monitoring":  {"granted": false, "url": "...Privacy_ListenEvent"},
-      "screen_recording":  {"granted": true,  "url": "...Privacy_ScreenCapture"}
-    }}
-   ```
-
-   Missing permissions are surfaced via stderr (e.g.
-   `Missing macOS permission — Input Monitoring: run open '<url>'`) but
-   do **not** block session creation — you still get a session; you just
-   won't be able to run the affected actions until you grant.
-
-4. If you prefer to do it by hand instead: **System Settings → Privacy
-   & Security**, and add the binary the agent runs as (your Python
-   interpreter, or the launching parent app — iTerm/Terminal/your IDE —
-   macOS ties permission to the launching parent) to each of the three
-   panes above.
-
-## Resetting all three consents
-
-```bash
-sudo tccutil reset Accessibility
-sudo tccutil reset ListenEvent        # Input Monitoring
-sudo tccutil reset ScreenCapture      # Screen Recording
-```
-
-Note: this works on personal installs. Managed/MDM-locked Macs may
-ignore the request.
-
-## What works after consent
-
-- **Accessibility** → `observe` returns the focused app's element tree,
-  normalized roles, and click coordinates in Quartz points (same unit as
-  mouse events — no scale math on Retina); `click` does
-  `AXUIElementPerformAction(...,"AXPress")`; `fill` does
-  `AXSetAttributeValue(elem,"AXValue",…)`.
-- **Input Monitoring** → `press_key` and combo keys (`Cmd+Q`, `Cmd+Tab`,
-  etc.) land real synthesized keystrokes via `CGEventPost`.
-- **Screen Recording** → `screenshot` / `CGWindowListCreateImage`
-  returns the on-screen windows (instead of an empty/black image).
-
-## Known limitations in this MVP
-
-- `type` is stubby; for real Unicode input integrate
-  `Quartz.CGEventCreateKeyboardEvent` with `CGEventKeyboardSetUnicodeString`
-  or use the clipboard.
-- `_screenshot()` uses `CGWindowListCreateImage` and **cannot capture
-  the screen while Secure Input is active** (1Password password prompts,
-  the macOS lock screen, etc.).
-- The Screen Recording probe checks whether the captured image has a
-  non-zero width/height (a denied/undetermined consent returns an empty
-  image, not a black one). This is reliable on real hardware.
-
-## Troubleshooting
-
-| symptom | fix |
+| Field | Interpretation |
 |---|---|
-| `AXIsProcessTrusted()` returns False | Re-grant Accessibility; `qcu doctor` shows the pane URL. |
-| First `qcu observe` returns "Accessibility permission not granted" | Run `qcu session start --context desktop` (it triggers the prompt via the preflight), not just `observe`. |
-| `press_key`/`fill` silently does nothing | Missing **Input Monitoring** (not just Accessibility). `qcu doctor` reports it; grant then re-run. |
-| Screenshot returns black / "image is None" | Missing **Screen Recording**. Grant it, then `qcu session end` + `session start` (restart required — Apple limitation). |
-| Coordinate clicks land off-target | The focused app might have a custom coordinate space; try `qcu act '{"type":"click","params":{"x":...,"y":...}}'` to verify mouse injection works. |
-| Clicks do nothing at all | `sudo tccutil reset Accessibility`, restart Terminal/iTerm, `qcu session start --context desktop` to re-grant. |
-| Screenshot returns black (Secure Input) | Secure Input is active in another app. Close it and retry. |
+| `implemented` | Backend code exists |
+| `dependencies_present` | Required import/dependency is present; not proof of live access |
+| `session_accessible` | true/false/null: live access, failure, or not yet established |
+| `can_read_controls` | true/false/null: controls read, unavailable, or empty/unexposed/unknown |
+| `supported_actions` | Backend action vocabulary; each control still needs native support |
+| `result_verification` | Has read-only postcondition implementation; individual checks may fail |
+| `foreground_input_required` | false for UIA patterns; action-dependent for macOS |
+| `available`, `reason` | Whether the current target was established as usable, and why not |
 
-## Strict-background mode (`--strict-background`)
+A root-only/empty tree can reflect provider exposure, privileges, transient
+state, truncation or cross-process restrictions. Do not conclude that the app
+has no controls. `read_errors`, `tree_truncated` and native properties preserve
+those boundaries. Dependency installation is never the availability probe.
 
-Real-world problem: when an agent drives QCU while the user is actively
-working, `activateWithOptions_` / `open -a` rip focus to the target app,
-and between QCU calls the frontmost app drifts (Finder→飞书→Clash was seen
-in production), so `observe` ends up inspecting the wrong app entirely.
+## macOS AX
+
+Install `.[macos]`. Accessibility enables AX reading/actions; Screen Recording
+is relevant to capture/OCR. `doctor` shows permission probes, with null for probe
+errors. Input Monitoring checks listening access, not delivery of synthetic
+input. Desktop start may prompt for permissions; the user must grant them.
 
 ```bash
-qcu session start --context desktop --strict-background
+qcu session start --context desktop
+qcu observe --pid 12345 --window 'Fixture window' --compact
 ```
 
-This flag makes the session **fail-fast on focus theft and drift**:
+Explicit app/PID never silently falls back to the frontmost app. A requested
+window must uniquely match. Zero matches reports `window_not_found`; multiple
+matches reports `ambiguous_window` with candidates. The live PID/window binding
+is inherited by later reads and actions; closing the window invalidates it.
 
-- **`launch_app` / `activate_app` are refused** outright (`ok=false`,
-  message names the mode). These can't be made background-safe without a
-  larger refactor that drives apps purely via AX (no window activation).
-  Until then, use AX-direct actions (`fill`/`click` on a ref) instead.
-- **Every other action aborts if the frontmost app has drifted** from the
-  one captured at session start (`ok=false`, message shows expected vs
-  actual). This turns silent "I clicked the wrong app" into a loud failure.
-- **`observe` does not abort** (it never steals focus), but it surfaces
-  `routing_meta.strict_background_drift=true` with the expected/actual
-  names so the caller knows the tree may belong to the wrong app.
+Native refs carry a backend lifecycle, target and observation. Native handles
+are never reconstructed after restart by path, ordinal or name. Before use, AX
+checks live handle, PID, window membership and enabled state. Informational AX
+text is kept in `raw_tree` even when it has no actionable ref.
 
-What this mode does **NOT** do: it does not enable true background control
-(acting on a non-frontmost app without ever activating it). That requires
-the AX-without-activation refactor and is future work. The flag is an
-honest guardrail, not a capability.
+AXPress and AXValue are preferred. After entering an AX call, ambiguous errors
+stop; no repeat press, activation/repress, Apple Events action or keyboard paste
+is used to resolve uncertainty. `fill` reads the exact value back. Generic AX
+signal changes are UI evidence; use `verify` to confirm a requested result.
+Explicit `double_click` retains its two-click meaning.
 
+Quartz keyboard/scroll/coordinate paths need a matching foreground target and
+live window ownership. `--strict-background` rejects focus-stealing operations
+and detects foreground drift; it is not background keyboard delivery.
+
+## Screenshots, coordinates and OCR
+
+A capture, grounding, action and verification share the same session/backend/
+window or browser document. No browser is created by desktop fallback. Missing
+capture, geometry, ownership or pattern support returns a specific unavailable
+reason. An explicit layer override cannot bypass a conflicting target scope.
+
+The macOS capture path uses the bound window ID, reports screen-point origin
+and image scale, and rechecks the target around capture. It does not capture the
+entire desktop in place of a missing window. The coordinate gate checks PID,
+window identity, bounds and overlays, and **fails closed** when Quartz inspection
+is missing. Negative screen origins are valid; coordinate spaces are explicit.
+
+Local `_vision` OCR is a callable helper for visible window text, with the same
+ownership checks and one dispatch. Pixel differences are `ui_changed`, not a
+verified task result. Only explicit text conditions establish OCR outcome.
+OCR fill is unsupported because focus and field-value identity are not proven.
+General icon/template/VLM grounding and Windows capture are not implemented.
+
+Apple Events is an explicit read-only compatibility observer in this preview.
+Its positional control references and incomplete scope contract do not satisfy
+the action guarantees. Its `act` returns unsupported/read-only before sending;
+`--pid`/`--window` are rejected rather than ignored. Observe with AX for actions.
+
+## Windows UIA minimum — Windows 真机未验证
+
+Install `.[windows]`, use an interactive desktop, and select a PID/window. UIA
+can resolve a supplied HWND directly; title/PID selection enumerates top-level
+window metadata only, not the entire desktop UIA tree.
+
+```powershell
+qcu session start --context desktop
+qcu observe --pid 12345 --window 0x123456 --compact
+```
+
+Bound identity includes process start time and image, PID, HWND, native runtime
+ID and session. Traversal is bounded by depth (maximum 32), nodes (default 500,
+maximum 2000 via Python observe), and time. It emits name, type, value, enabled,
+focus/offscreen state, bounds, parent/child refs, runtime/native properties,
+actual patterns and available actions. Foreign-process subtrees report skips.
+
+| Action | Required pattern | Verification |
+|---|---|---|
+| `click` / backend `invoke` | InvokePattern | Explicit result text/state |
+| `fill` | ValuePattern, writable | Exact value readback |
+| `toggle` | TogglePattern | Explicit checked state; one cycle only |
+| `select` | SelectionItemPattern | Selected=true readback |
+
+Implementation uses **uiautomation** for direct COM pattern access. It was the
+existing optional dependency and provides the four required patterns without
+bringing pywinauto's higher-level input/click behavior into semantic execution.
+Calls use the underlying pattern interfaces, never `Control.Click`, simulated
+mouse defaults, `SendKeys`, or loops such as “toggle until desired state”.
+
+A dedicated persistent MTA thread creates, owns, uses and releases UIA/COM
+objects. Only JSON/dataclasses cross the worker boundary. A timed-out worker is
+poisoned: new actions are refused, because the pending COM call may complete
+later. Restart and observe again; no automatic replay. Disabled, stale,
+ambiguous, readonly, inaccessible and missing-pattern cases are explicit.
+
+Validation script: `py scripts/verify_windows_uia.py`. It starts a disposable
+native fixture and an isolated QCU_HOME. Save its JSON output. Current macOS
+contract/mock results do **not** establish live Windows provider, privilege,
+threading, secure-desktop, remote-session or DPI behavior.
+
+Official technical references:
+
+- [Microsoft: UI Automation threading](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading)
+- [Microsoft: control patterns](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-controlpatternsoverview)
+- [uiautomation project](https://github.com/yinkaisheng/Python-UIAutomation-for-Windows)
+
+## Extending platforms
+
+Register a platform selector using `qcu.platforms.register_desktop_backend`,
+then register its Layer through `qcu.layers.runtime.register`. Missing platforms
+return `backend_not_implemented`. Linux and HarmonyOS have registration points
+only; neither has a full backend in this preview.

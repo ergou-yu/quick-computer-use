@@ -3,6 +3,79 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8] — 2026-09-16
+
+Control reliability and platform foundation. **Windows real device unverified.**
+
+- Scope AX observations to a unique requested window; missing/ambiguous targets
+  fail and later reads/actions retain the same binding.
+- Share lifecycle/target/observation reference scopes across AX, UIA and web;
+  reject stale/native restart refs and remove path/name/coordinate relocation.
+- Add `dispatch_state` and `outcome`; only explicit postconditions/readback
+  establish a requested result. Stop on ambiguous transport/verification;
+  never replay a single click or fill. Batches stop on unknown outcomes too.
+- Add value/checked/selected/text verification. Preserve UI-change diagnostics
+  separately from task-result evidence.
+- Bind capture, grounding, coordinates and verification to one session/target;
+  fail closed when window ownership cannot be inspected.
+- Add platform registry/capabilities and minimal Windows UIA Invoke, Value,
+  Toggle, SelectionItem patterns on a persistent COM worker. Isolate platform
+  dependencies and report Linux/HarmonyOS as not implemented.
+- Make the positional Apple Events compatibility observer read-only; OCR fill
+  is unsupported until focused field identity/value can be verified.
+- Add mock contracts, isolated Chromium regressions, disposable macOS/Windows
+  native validation scripts and migration/install documentation.
+- Add performance benchmarks beyond the web form script: a vision-loop local
+  baseline (Quartz capture + Apple Vision OCR), a raw-Playwright floor, and a
+  macOS desktop AX calculator run (`scripts/benchmark_vision_baseline.py`,
+  `scripts/benchmark_playwright_floor.py`, `scripts/benchmark_desktop_ax.py`).
+- Add `TEST-REPORT.md` — the 2026-09-16 release test report covering the
+  regression suite and the web/desktop/vision performance measurements.
+
+Migration: restart the task daemon, observe new opaque refs, inspect top-level
+outcome, and provide final batch action postconditions. `strict_ref` remains
+accepted; web ref actions now always refuse cached-coordinate fallback. Move
+Apple Events actions to newly observed AX refs. This contract tightening was
+consolidated into the 1.8 release; Windows is not advertised as fully
+supported. Historical test counts below remain historical; this round's
+results are in TEST-REPORT.md.
+
+## [1.7.1] — 2026-09-08
+
+- Verify native button effects in the target element's AXWindow, rather than
+  the first application window (which can be an unrelated auxiliary window).
+- Stop after a dispatched AX action with an unconfirmed effect or send error.
+  Return `ok:false`, `data.reason: outcome_unknown`, and `retry_safe:false`;
+  do not activate and re-press or replay through Apple Events/coordinates.
+- Capture coordinate-fallback state before the event. Preserve uncertain
+  outcomes when a pre-action snapshot is missing or verification is unavailable.
+- Start the verification polling budget after dispatch, so slow AX calls cannot
+  consume the budget and prevent every post-action observation.
+- Add multi-window and at-most-one-dispatch regressions, including explicit
+  double-clicks and ambiguous transport errors.
+
+## [1.7] — 2026-09-06
+
+- Add bounded `batch` form groups with one optional final observation, strict
+  web refs, value readback, and stop-on-failure results.
+- Remove unconditional network-idle waiting; add explicit target/readiness waits.
+- Serialize daemon UI work on one persistent thread, keep health checks separate,
+  preserve stderr, and prevent local replay after an ambiguous RPC outcome.
+- Stop the Python daemon on session end; avoid orphaning a daemon before a
+  logical session exists. Compact output retains disabled/focused state.
+- Return native AXStaticText values and bounded result/status text. Verify app
+  launches by exact bundle path and wait for process registration as well as windows.
+- Integrate the 1.6.1 distribution's pre-retry AX snapshot fix into the active source.
+- Rewrite the skill around current capabilities, scoped observations, short
+  action groups and observable outcomes. Remove unsupported universal speed claims.
+- Add unit/RPC/browser regressions and a loopback-only reproducible benchmark.
+
+## [1.6.1] — 2026-09-01
+
+- The distribution wheel captured an AX snapshot before the foreground retry,
+  preventing immediate effects from being missed and redundantly actuated.
+  This fix had not reached the active editable source; 1.7 reconciles the copies.
+
 ## [1.6] — 2026-08-21
 
 ### Fixed

@@ -208,9 +208,9 @@ def test_activate_app_marks_no_when_not_frontmost(layer, monkeypatch):
     fake_app = types.SimpleNamespace(
         localizedName=lambda: "TextEdit",
         processIdentifier=lambda: 4321,
-        activateWithOptions_=lambda flags: None,
+        activateWithOptions_=lambda flags: True,
     )
-    fake_frontmost = types.SimpleNamespace(localizedName=lambda: "Finder")
+    fake_frontmost = types.SimpleNamespace(localizedName=lambda: "Finder", processIdentifier=lambda: 999)
 
     class _FakeWS:
         @classmethod
@@ -233,12 +233,11 @@ def test_activate_app_marks_no_when_not_frontmost(layer, monkeypatch):
     monkeypatch.setattr("qcu.session.patch", lambda **kw: None, raising=False)
 
     res = layer.act(Action(type="activate_app", params={"app": "TextEdit"}))
-    assert res.ok is True
+    assert res.ok is False
+    assert res.dispatch_state == "sent" and res.outcome == "unknown"
     vm = res.data["verification"]
-    # The app has a window, but frontmost is Finder, not TextEdit → overridden to no.
-    assert vm["verified"] == "no"
-    assert vm["frontmost_after"] == "Finder"
-    assert "frontmost" in vm["reason"]
+    assert vm["verified"] is False
+    assert vm["frontmost_matches"] is False
 
 
 # ===========================================================================

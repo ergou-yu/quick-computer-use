@@ -8,9 +8,8 @@ user is actively working. This module exposes a single
     1. ``NSWorkspace.launchApplicationAtURL:options:configuration:error:``
        with ``NSWorkspaceLaunchConfigurationActivationKey=False`` — the
        documented "launch without activation" path on macOS 10.15+
-    2. AppleScript ``launch application "X"`` — works on cold launches and is
-       background-by-default
-    3. ``open -a`` as a last-resort fallback (activates; flagged in output)
+    2. AppleScript ``launch application "X"`` only when no native call could
+       be made. An attempted call is never replayed through another transport.
 
 :func:`activate_app` is kept for the rare caller that genuinely wants focus.
 """
@@ -178,91 +177,71 @@ def _app_url_by_name(ws: Any, name: str):
     return None
 
 
-def launch_app_background(app: str) -> tuple[bool, str, bool]:
-    """Launch ``app`` without bringing it to the foreground.
+class DispatchTuple(tuple):
+    """Preserve tuple-unpacking callers while exposing transport uncertainty."""
+    def __new__(cls, values: tuple, dispatch_state: str):
+        result = super().__new__(cls, values)
+        result.dispatch_state = dispatch_state
+        return result
 
-    Returns ``(ok, message, focus_disturbed)``:
-      - ``ok`` — whether the launch command itself succeeded
-      - ``message`` — short human-readable status for telemetry
-      - ``focus_disturbed`` — True only when we degraded to the
-        activating fallback (``open -a``). Callers should surface this so
-        the user knows QCU grabbed focus.
+
+def launch_app_background(app: str) -> tuple[bool, str, bool]:
+    """Launch through one selected transport; never replay an uncertain call.
+
+    The returned three-tuple retains ``(ok, message, focus_disturbed)`` and has
+    a ``dispatch_state`` attribute. Dependency/preflight failure may choose
+    AppleScript before sending. A failed native call or script is never
+    followed by another launch or a focus-stealing ``open -a``.
     """
     app = (app or "").strip()
     if not app:
-        return False, "launch_app needs params.app", False
-
-    err_msg = ""
+        return DispatchTuple((False, "launch_app needs params.app", False), "not_sent")
+    launcher, app_url = None, None
     try:
         from AppKit import NSWorkspace
-
         ws = NSWorkspace.sharedWorkspace()
         app_url = _app_url_by_name(ws, app)
-        if app_url is not None:
-            NSWorkspaceLaunchWithoutActivation = 0x00000200
-            cfg = {"NSWorkspaceLaunchConfigurationActivationKey": False}
-            _ok, _err = ws.launchApplicationAtURL_options_configuration_error_(
-                app_url,
-                NSWorkspaceLaunchWithoutActivation,
-                cfg,
-                None,
-            )
-            if _ok is not None:
-                return True, f"launched {app} in background", False
-            if _err is not None:
-                err_msg = str(_err)[:200]
-    except Exception as e:  # noqa: BLE001
-        err_msg = f"{type(e).__name__}: {e}"
-
-    # Fallback 1: AppleScript `launch` — background by default, cold-launch only.
+        launcher = getattr(ws, "launchApplicationAtURL_options_configuration_error_", None)
+    except Exception:
+        pass
+    if app_url is not None and callable(launcher):
+        try:
+            running, error = launcher(app_url, 0x00000200,
+                                      {"NSWorkspaceLaunchConfigurationActivationKey": False}, None)
+            if running is not None:
+                return DispatchTuple((True, f"launched {app} in background", False), "sent")
+            return DispatchTuple((False, f"launch outcome unknown: native call failed ({error})", False), "unknown")
+        except Exception as exc:
+            return DispatchTuple((False, f"launch outcome unknown: {exc}", False), "unknown")
+    # No launch call was made above. Choose the available background transport.
     try:
-        res = subprocess.run(
-            ["osascript", "-e", f'launch application "{_as_escape(app)}"'],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if res.returncode == 0:
-            return True, f"launched {app} via osascript launch", False
-    except Exception as e:  # noqa: BLE001
-        err_msg = f"launch fallback failed: {e}"
-
-    # Fallback 2: open -a. Activates — flag it.
-    try:
-        subprocess.Popen(
-            ["open", "-a", app],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        time.sleep(0.4)
-        return True, f"launched {app} (foreground — background launch failed: {err_msg})", True
-    except Exception as e:  # noqa: BLE001
-        return False, f"launch_app failed: {type(e).__name__}: {e}", False
+        result = subprocess.run(["osascript", "-e", f'launch application "{_as_escape(app)}"'],
+                                capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return DispatchTuple((True, f"launched {app} via osascript launch", False), "sent")
+        return DispatchTuple((False, f"launch outcome unknown: script failed ({(result.stderr or '').strip()[:200]})", False), "unknown")
+    except FileNotFoundError:
+        return DispatchTuple((False, "launch unavailable: AppKit launch and osascript are unavailable", False), "not_sent")
+    except Exception as exc:
+        return DispatchTuple((False, f"launch outcome unknown: {exc}", False), "unknown")
 
 
 def activate_app(app: str) -> tuple[bool, str]:
-    """Bring ``app`` to the foreground (rare intended use).
-
-    Returns ``(ok, message)``. Calls ``launch_app_background`` first to make
-    sure the app is running, then sends ``activate application`` via osascript.
-    """
+    """Prepare a running app, then request activation exactly once."""
     app = (app or "").strip()
     if not app:
-        return False, "activate_app needs params.app"
-    ok, _msg, _ = launch_app_background(app)
+        return DispatchTuple((False, "activate_app needs params.app"), "not_sent")
+    launch = launch_app_background(app)
+    ok, message, _ = launch
     if not ok:
-        return False, _msg
+        return DispatchTuple((False, message), getattr(launch, "dispatch_state", "not_sent"))
     try:
-        res = subprocess.run(
-            ["osascript", "-e", f'activate application "{_as_escape(app)}"'],
-            capture_output=True,
-            text=True,
-            timeout=4,
-        )
-        if res.returncode == 0:
-            return True, f"activated {app}"
-        return False, f"activate failed: {(res.stderr or '').strip()[:200]}"
-    except Exception as e:  # noqa: BLE001
-        return False, f"activate failed: {type(e).__name__}: {e}"
+        result = subprocess.run(["osascript", "-e", f'activate application "{_as_escape(app)}"'],
+                                capture_output=True, text=True, timeout=4)
+        if result.returncode == 0:
+            return DispatchTuple((True, f"activated {app}"), "sent")
+        return DispatchTuple((False, f"activation outcome unknown: script failed ({(result.stderr or '').strip()[:200]})"), "unknown")
+    except Exception as exc:
+        # A launch was already dispatched. Even absent osascript cannot make
+        # this composite action safe to replay.
+        return DispatchTuple((False, f"activation outcome unknown: {exc}"), "unknown")

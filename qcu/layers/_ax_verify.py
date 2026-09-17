@@ -258,19 +258,33 @@ def snapshot(target: Any, ax_getter: Callable[..., Any], *, app: Any = None) -> 
     except Exception:
         pass
 
-    # Window-scope signals (window title change, window count change, and the
-    # text content of the focused window).
+    # Window order is not target identity: providers can put auxiliary windows
+    # first even while the button belongs to another, background window.
+    win = None
+    try:
+        _, win = ax_getter(__import__("ApplicationServices").AXUIElementCopyAttributeValue,
+                           target, "AXWindow")
+    except Exception:
+        pass
     if app is not None:
         try:
             _, windows = ax_getter(__import__("ApplicationServices").AXUIElementCopyAttributeValue,
                                    app, "AXWindows")
             wins = list(windows or [])
             snap.window_count = len(wins)
-            if wins:
-                _, t = ax_getter(__import__("ApplicationServices").AXUIElementCopyAttributeValue,
-                                 wins[0], "AXTitle")
-                snap.window_title_hash = hash_string(t)
-                snap.window_text_hash = _window_text_hash(wins[0], ax_getter)
+            # A single app window is an unambiguous fallback. In a multi-window
+            # app, no AXWindow means we cannot identify the target's window.
+            if win is None and len(wins) == 1:
+                win = wins[0]
+        except Exception:
+            pass
+
+    if win is not None:
+        try:
+            _, t = ax_getter(__import__("ApplicationServices").AXUIElementCopyAttributeValue,
+                             win, "AXTitle")
+            snap.window_title_hash = hash_string(t)
+            snap.window_text_hash = _window_text_hash(win, ax_getter)
         except Exception:
             pass
 
@@ -352,7 +366,10 @@ def verify(
         )
 
     samples_taken = 0
-    t_start = before.timestamp
+    # Start the polling budget after dispatch. A slow snapshot or AXPress can
+    # outlast the whole window; timing from the old baseline would then skip
+    # every post-action sample, falsely rejecting even a completed operation.
+    t_start = time.perf_counter()
     t_next = t_start + (first_poll_ms / 1000.0)
     deadline = t_start + (window_ms / 1000.0)
 

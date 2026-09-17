@@ -1,41 +1,11 @@
-"""macOS Apple Events layer (a.k.a. System Events via osascript).
+"""Read-only macOS Apple Events compatibility observation.
 
-This is the **zero-permission-required** desktop a11y path on macOS. It talks
-to ``System Events`` through ``osascript`` (AppleScript) over Apple Events,
-which needs the *Automation* (Apple Events) TCC grant — not the *Accessibility*
-grant that ``desktop_ax`` requires. The Automation grant is given to the
-calling process (ZCode / Codex / Terminal) by the user the first time we ask;
-it survives across child processes because osascript inherits it.
-
-Why this layer exists
----------------------
-``desktop_ax`` (PyObjC against ``ApplicationServices``) is the *better* path
-when it works: native AXUIElement handles, AXPress actions, subroles. But it
-requires the Accessibility TCC grant, which:
-
-- is bound to the Python interpreter binary, not the session
-- cannot be granted programmatically; the user must toggle it in System Settings
-- was never actually trusted on machines we tested, so ``desktop_ax.observe``
-  silently returned ``elements=[]`` and the router defaulted to screenshot.
-
-That left desktop computer-use effectively **degenerate to vision-based
-screenshot + VLM** — exactly what QCU was supposed to eliminate. This layer
-breaks that dependency: as long as the host process (ZCode) has Automation
-rights, every ``qcu observe`` call works.
-
-Field contract
---------------
-The Element list and ``_last_refs`` dicts use the same schema as
-``desktop_ax`` (``role: str, name: str, value: str, cx, cy, bounds: Rect, path``
-so the rules/features/CLI handlers don't need a separate code path.
-
-The ``path`` we store is the positional AppleScript "UI element N of UI
-element M of window W" chain (e.g. ``"w1.2.4"`` → ``UI element 4 of UI
-element 2 of window 1``). Positional paths survive app reloads better than
-names (Find→Search rebrand doesn't break automation), and they let us click
-elements that have no name (toolbar buttons).
-
-Verified on macOS 26 with PyObjC absent and Accessibility disabled.
+This adapter requires osascript and the applicable Automation permissions.
+It can read an application's System Events tree, but cannot bind exact
+process/window identities or validate positional paths as actionable refs.
+Use desktop_ax observations for native actions. All public ``act`` requests
+are refused before dispatch; historical private action helpers remain only
+for migration review and are never selected by the runtime action contract.
 """
 
 from __future__ import annotations
@@ -519,6 +489,14 @@ class DesktopAppleEventsLayer(Layer):
 
     def observe(self, max_depth: int = 6, **options: Any) -> Observation:
         """Run the AppleScript walk and parse its TSV output into Elements."""
+        unsupported = {key: options[key] for key in ("pid", "window", "window_id") if options.get(key) is not None}
+        if unsupported:
+            return Observation(context="desktop", elements=[], routing_meta={
+                "layer": self.name, "available": False, "reason": "unsupported_target_scope",
+                "read_only": True, "requested": unsupported,
+                "error": "Apple Events compatibility observation cannot bind a process/window; use desktop_ax"})
+        if options.get("app"):
+            self._last_app = str(options["app"])
         if not self.is_available(prompt=True):
             return Observation(
                 context="desktop",
@@ -712,6 +690,9 @@ class DesktopAppleEventsLayer(Layer):
                 indent = "  " * depth_i
                 raw_lines.append(f"{indent}{role_norm} {name_s!r}")
 
+        for element in elements:
+            element.properties["actionable"] = False
+            element.properties["read_only_backend"] = True
         self._last_refs = new_refs
         self._last_app = app
         self._last_title = title
@@ -862,6 +843,15 @@ class DesktopAppleEventsLayer(Layer):
     # ------------------------------------------------------------------
 
     def act(self, action: Action) -> LayerResult:
+        # Positional System Events paths do not prove element/window identity.
+        # Retain this adapter for diagnostic reads, but do not allow its legacy
+        # action helpers to bypass the native ref and result contracts.
+        return LayerResult(ok=False, layer=self.name, dispatch_state="not_sent",
+            message="unsupported action type: Apple Events compatibility backend is read-only; observe desktop_ax and use its new refs",
+            data={"reason": "backend_read_only", "supported_actions": [], "retry_safe": False})
+
+    def _legacy_act(self, action: Action) -> LayerResult:
+        """Historical implementation retained for migration review; not routed."""
         if not self.is_available(prompt=False):
             return LayerResult(
                 ok=False,
@@ -1071,8 +1061,8 @@ class DesktopAppleEventsLayer(Layer):
             )
         # Click-safety gate (Bug: 多显示器/遮挡下坐标点击落到飞书等更高栈序窗口).
         # Runs before BOTH the desktop_ax delegation and the SE `click at`
-        # fallback so the wrong-window abort covers every backend. fail-open:
-        # Quartz introspection unavailable → ok=True (no new hard dep).
+        # fallback so the wrong-window abort covers every backend. The gate
+        # refuses input when Quartz ownership inspection is unavailable.
         from qcu.layers._click_safety import (
             assert_click_target, format_safety_failure,
         )
@@ -1349,9 +1339,12 @@ class DesktopAppleEventsLayer(Layer):
         """
         from qcu.layers._app_launch import launch_app_background
 
-        ok, msg, focus_disturbed = launch_app_background(app)
+        dispatch = launch_app_background(app)
+        ok, msg, focus_disturbed = dispatch
+        state = getattr(dispatch, "dispatch_state", "sent" if ok else "not_sent")
         if not ok:
-            return LayerResult(ok=False, layer=self.name, message=msg)
+            return LayerResult(ok=False, layer=self.name, message=msg, dispatch_state=state,
+                               data={"reason": "outcome_unknown"} if state == "unknown" else {})
         # Already-running apps register immediately; cold launches take ~0.4s.
         time.sleep(0.4)
         self._last_app = (app or "").strip()
@@ -1363,7 +1356,7 @@ class DesktopAppleEventsLayer(Layer):
         except Exception:
             pass
         marker = " (foreground — focus disturbed)" if focus_disturbed else " (background)"
-        return LayerResult(ok=True, layer=self.name, message=msg + marker)
+        return LayerResult(ok=True, layer=self.name, message=msg + marker, dispatch_state=state)
 
     def _activate_app(self, app: str) -> LayerResult:
         """Bring an app to the foreground explicitly.
@@ -1375,9 +1368,13 @@ class DesktopAppleEventsLayer(Layer):
         """
         from qcu.layers._app_launch import activate_app
 
-        ok, msg = activate_app(app)
-        self._last_app = (app or "").strip()
-        return LayerResult(ok=ok, layer=self.name, message=msg)
+        dispatch = activate_app(app)
+        ok, msg = dispatch
+        state = getattr(dispatch, "dispatch_state", "sent" if ok else "not_sent")
+        if ok:
+            self._last_app = (app or "").strip()
+        return LayerResult(ok=ok, layer=self.name, message=msg, dispatch_state=state,
+                           data={"reason": "outcome_unknown"} if state == "unknown" else {})
 
     # ------------------------------------------------------------------
     # Helpers

@@ -128,6 +128,8 @@ SCHEMAS: dict[str, dict] = {
                     "hover",
                     "type",
                     "fill",
+                    "toggle",
+                    "select",
                     "press_key",
                     "scroll",
                     "navigate",
@@ -143,7 +145,7 @@ SCHEMAS: dict[str, dict] = {
             },
             "params": {
                 "type": "object",
-                "description": "Type-specific. e.g. click uses {ref} or {x, y}; fill uses {ref, text}; press_key uses {key}; wait uses {ms} or {seconds} (or {s}).",
+                "description": "Type-specific. click uses {ref} or {x,y}; fill uses {ref,text}. Optional verify: {kind: value|checked|selected|text, ref?: opaque ref, equals?: string|boolean, contains?: string, timeout_ms?: 0..10000}. Non-text conditions require ref. Invalid conditions prevent dispatch.",
             },
         },
     },

@@ -19,3 +19,7 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Release artifacts (hosted on GitHub Releases)
+dist/
+*.zip

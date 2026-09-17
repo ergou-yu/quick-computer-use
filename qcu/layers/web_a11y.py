@@ -11,8 +11,8 @@ The default control plane. Strategy:
    actions can be done via a CSS selector (cheaper + more robust than
    coordinates across re-layouts).
 4. ``act(ref=...)`` prefers ``page.locator('[data-llm-ref="ref_N"]').click()``;
-   if the locator is gone (page mutated) we fall back to the cached
-   coordinate.
+   if the locator is missing or ambiguous, observe again. Locator exceptions
+   never cause a second coordinate dispatch.
 5. Screenshots are never taken unless the router asks for one.
 
 Reference: chromedevtools.github.io/devtools-protocol/tot/Accessibility/
@@ -39,36 +39,9 @@ from qcu.layers.base import Layer
 from qcu.layers.runtime import register
 
 
-async def _goto_with_retry(page: Any, url: str, *, attempts: int = 3) -> None:
-    """Navigate with retry on Chromium connection-drop errors.
-
-    We've seen ``ERR_CONNECTION_CLOSED`` and ``ERR_NETWORK_CHANGED`` on
-    flaky external links (cellular, captive portals, slow TLS handshakes).
-    These are transient; a quick retry usually succeeds.
-    """
-    import asyncio
-
-    last_err: Optional[BaseException] = None
-    for i in range(attempts):
-        try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            return
-        except Exception as e:  # noqa: BLE001
-            msg = str(e).lower()
-            transient = (
-                "err_connection_closed" in msg
-                or "err_network_changed" in msg
-                or "err_aborted" in msg
-                or "err_internet_disconnected" in msg
-                or "err_timed_out" in msg
-                or "err_empty_response" in msg
-            )
-            last_err = e
-            if not transient or i == attempts - 1:
-                raise
-            await asyncio.sleep(0.5 * (i + 1))
-    if last_err is not None:
-        raise last_err
+async def _goto_with_retry(page: Any, url: str, *, attempts: int = 1) -> None:
+    """Compatibility name: one navigation dispatch, even on an ambiguous error."""
+    await page.goto(url, wait_until="domcontentloaded", timeout=15000)
 
 
 def _is_mac() -> bool:
@@ -153,37 +126,18 @@ class WebA11yLayer(Layer):
         self._cdp: Any = None
         self._last_refs: dict[str, dict[str, Any]] = {}  # ref -> {backend_id, cx, cy, bounds}
         self._closed = False
+        from qcu.common.refs import NativeRefRegistry
+        self._refs = NativeRefRegistry(self.name)
+        self._observed_page = None
+        self._target_scope: dict[str, Any] = {}
         # Whether THIS process launched the browser and therefore owns its
         # lifecycle. The daemon is always detached, so this is effectively
         # always False — but it documents intent and guards close() against
         # ever terminating a shared browser.
         self._owns_browser = False
         self._cdp_port: Optional[int] = None  # port of the daemon we connected to
-        # Restore cached refs from session (if any) so the first `qcu act`
-        # after a fresh process can still click by ref.
-        try:
-            from qcu.session import load as _load
-
-            s = _load()
-            if s and getattr(s, "last_refs", None):
-                for entry in getattr(s, "last_refs", None) or []:
-                    ref = entry.get("ref")
-                    if not ref:
-                        continue
-                    b = entry.get("bounds")
-                    bounds = None
-                    if b:
-                        bounds = Rect(b["x"], b["y"], b["width"], b["height"])
-                    self._last_refs[ref] = {
-                        "backend_id": entry.get("backend_id"),
-                        "cx": entry.get("cx"),
-                        "cy": entry.get("cy"),
-                        "role": entry.get("role"),
-                        "name": entry.get("name"),
-                        "bounds": bounds,
-                    }
-        except Exception:
-            pass
+        # Native/CDP handles never survive a backend lifecycle. Observe again
+        # after a daemon restart; persisted refs are only routing diagnostics.
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -436,9 +390,10 @@ class WebA11yLayer(Layer):
             except Exception:
                 pass
             self._loop = None
-            # Drop handles, but keep _last_refs intact — it is rebuilt from the
-            # session file on the next process's __init__, and the live DOM's
-            # data-llm-ref attributes survive because we didn't close anything.
+            self._last_refs.clear()
+            self._refs.invalidate()
+            self._observed_page = None
+            # The browser may stay alive; process-local reference handles do not.
             self._page = None
             self._browser = None
             self._context = None
@@ -463,20 +418,21 @@ class WebA11yLayer(Layer):
         cdp = self._cdp
         assert page is not None and cdp is not None
 
-        # Wait for the page to be ready before snapshotting. This replaces the
-        # old pattern of a manual fixed `wait` after every navigate/click:
-        # domcontentloaded is near-instant, and a short networkidle cap catches
-        # the last in-flight XHRs so the a11y tree reflects the final DOM
-        # (otherwise infobox data injected by JS can be missed). Both have
-        # tight timeouts so a stuck page can't hang observe.
+        # A live dashboard may never become network-idle. Wait for document
+        # readiness by default; callers can request a known target for async UI.
+        wait_until = options.get("wait_until", "domcontentloaded")
+        timeout_ms = options.get("timeout_ms", 3000)
+        if wait_until not in {"domcontentloaded", "networkidle"}:
+            raise ValueError("wait_until must be domcontentloaded or networkidle")
+        if not isinstance(timeout_ms, int) or isinstance(timeout_ms, bool) or not 1 <= timeout_ms <= 60000:
+            raise ValueError("timeout_ms must be an integer in 1..60000")
+        readiness_timed_out = False
         try:
-            await page.wait_for_load_state("domcontentloaded", timeout=3000)
+            await page.wait_for_load_state(wait_until, timeout=timeout_ms)
         except Exception:
-            pass
-        try:
-            await page.wait_for_load_state("networkidle", timeout=1500)
-        except Exception:
-            pass
+            readiness_timed_out = True
+        if options.get("wait_for"):
+            await page.locator(options["wait_for"]).wait_for(state="visible", timeout=timeout_ms)
 
         requested_depth = max_depth
         effective_depth = max_depth if max_depth > 0 else -1
@@ -573,7 +529,15 @@ class WebA11yLayer(Layer):
                 generation = int(getattr(_session, "observation_generation", 0) or 0) + 1
         except Exception:
             generation = 0
-        gen_prefix = f"obs_{generation}" if generation else ""
+        target_id = None
+        try:
+            target_id = (await cdp.send("Target.getTargetInfo"))["targetInfo"]["targetId"]
+        except Exception:
+            pass
+        self._target_scope = {"browser_port": self._cdp_port, "tab_id": target_id,
+                              "page_lifecycle": str(id(page))}
+        self._refs.begin(self._target_scope)
+        self._observed_page = page
 
         # Roles whose text is worth showing the LLM even though they aren't
         # actable. This is what makes infobox dates / form labels / headings
@@ -667,7 +631,7 @@ class WebA11yLayer(Layer):
                     if bid is not None and bid in seen_backend:
                         ref = seen_backend[bid]
                     else:
-                        ref = f"{gen_prefix}:ref_{counter}" if gen_prefix else f"ref_{counter}"
+                        ref = self._refs.issue(counter)
                         counter += 1
                         if bid is not None:
                             seen_backend[bid] = ref
@@ -919,6 +883,10 @@ class WebA11yLayer(Layer):
         )
 
         routing_meta = {
+            "target": dict(self._target_scope, url=url, title=title),
+            "ref_scope": self._refs.scope,
+            "readiness": {"wait_until": wait_until, "timed_out": readiness_timed_out,
+                          "wait_for": options.get("wait_for")},
             "layer": self.name,
             "n_refs": len(elements),
             "n_returned": len(filtered),
@@ -970,9 +938,64 @@ class WebA11yLayer(Layer):
         try:
             return self._loop.run_until_complete(self._act_async(action))
         except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}")
+            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}",
+                               data={"reason": "outcome_unknown"}, dispatch_state="unknown")
 
     async def _act_async(self, action: Action) -> LayerResult:
+        from qcu.common.verification import validate_condition
+        condition = action.params.get("verify")
+        try:
+            validate_condition(condition)
+            if condition and condition.get("ref"):
+                ref = condition["ref"]
+                if ref not in self._last_refs or not self._ref_current(ref):
+                    raise ValueError("verification ref is stale; observe again")
+        except ValueError as exc:
+            return LayerResult(False, self.name, str(exc), data={"reason": "invalid_verification"})
+        try:
+            result = await self._dispatch_async(action)
+        except Exception as exc:
+            return LayerResult(False, self.name, f"{type(exc).__name__}: {exc}",
+                               data={"reason": "outcome_unknown"}, dispatch_state="unknown")
+        if condition and result.dispatch_state != "not_sent":
+            evidence = await self._verify_condition(condition)
+            result.data["verification"] = evidence
+            result.outcome = "verified" if evidence["verified"] else "unknown"
+            result.ok = bool(evidence["verified"])
+            if not result.ok:
+                result.data["reason"] = "outcome_unknown"
+        return result
+
+    async def _verify_condition(self, condition: dict[str, Any]) -> dict[str, Any]:
+        from qcu.common.verification import match_condition
+        import time
+        deadline = time.monotonic() + condition.get("timeout_ms", 1000) / 1000
+        evidence = {"verified": False, "reason": "condition_not_observed"}
+        while True:
+            try:
+                ref = condition.get("ref")
+                if ref:
+                    loc = self._page.locator(f"[data-llm-ref={json.dumps(ref)}]")
+                    if await loc.count() != 1:
+                        return {"verified": False, "reason": "verification_ref_missing_or_ambiguous"}
+                    value = await loc.evaluate("""el => ({value: el.isContentEditable ? el.textContent : el.value,
+                        name: el.innerText || el.textContent, checked: typeof el.checked === 'boolean' ? el.checked :
+                        (el.hasAttribute('aria-checked') ? el.getAttribute('aria-checked') === 'true' : null),
+                        selected: typeof el.selected === 'boolean' ? el.selected :
+                        (el.hasAttribute('aria-selected') ? el.getAttribute('aria-selected') === 'true' : null)})""")
+                    elements = [Element(ref, "unknown", value=value.get("value"), name=value.get("name"),
+                                        properties={"checked": value.get("checked"), "selected": value.get("selected")})]
+                else:
+                    text = await self._page.locator("body").inner_text(timeout=1000)
+                    elements = [Element("", "text", name=line) for line in text.splitlines()]
+                evidence = match_condition(condition, elements)
+            except Exception as exc:
+                evidence = {"verified": False, "reason": "verification_unavailable", "error": str(exc)}
+            if evidence["verified"] or time.monotonic() >= deadline:
+                return evidence
+            await asyncio.sleep(min(0.05, max(0, deadline-time.monotonic())))
+
+    async def _dispatch_async(self, action: Action) -> LayerResult:
         page = self._page
         assert page is not None
         atype = action.type
@@ -986,8 +1009,11 @@ class WebA11yLayer(Layer):
                 await _goto_with_retry(page, url, attempts=3)
             except Exception as e:  # noqa: BLE001
                 return LayerResult(
-                    ok=False, layer=self.name, message=f"navigate failed: {type(e).__name__}: {e}"
+                    ok=False, layer=self.name, message=f"navigate failed: {type(e).__name__}: {e}",
+                    data={"reason": "outcome_unknown"}, dispatch_state="unknown"
                 )
+            self._last_refs.clear()
+            self._refs.invalidate()
             # Persist the URL so a fresh `qcu` invocation can rewind here, and
             # immediately drop any stale refs — they point at the previous page.
             try:
@@ -1043,6 +1069,9 @@ class WebA11yLayer(Layer):
                 invalidate_observation(current_url=after, document_changed=moved)
             except Exception:
                 pass
+            if moved:
+                self._last_refs.clear()
+                self._refs.invalidate()
             if not moved:
                 msg = "no history to move" if not dispatch_ok else (f"{type(err).__name__}: {err}" if err else "no_effect")
                 return LayerResult(
@@ -1050,23 +1079,25 @@ class WebA11yLayer(Layer):
                     layer=self.name,
                     message=f"{atype}: {msg} (still at {after})",
                     data={
-                        "dispatched": dispatch_ok,
+                        "dispatched": True if dispatch_ok else None,
                         "effect_verified": False,
                         "no_effect": True,
                         "before_url": before,
                         "after_url": after,
                     },
+                    dispatch_state="sent" if dispatch_ok else "unknown",
                 )
             return LayerResult(
                 ok=True,
                 layer=self.name,
                 message=f"{atype} -> {after}",
                 data={
-                    "dispatched": dispatch_ok,
+                    "dispatched": True if dispatch_ok else None,
                     "effect_verified": True,
                     "before_url": before,
                     "after_url": after,
                 },
+                dispatch_state="sent" if dispatch_ok else "unknown",
             )
 
         if atype == "wait":
@@ -1099,7 +1130,8 @@ class WebA11yLayer(Layer):
                     ok=False,
                     layer=self.name,
                     message=f"press_key dispatch failed: {type(e).__name__}: {e}",
-                    data={"dispatched": False, "effect_verified": False},
+                    data={"reason": "outcome_unknown", "effect_verified": False},
+                    dispatch_state="unknown",
                 )
             # Give the page a beat to react (navigation, dialog, value change).
             await asyncio.sleep(0.05)
@@ -1177,8 +1209,7 @@ class WebA11yLayer(Layer):
             return None
         try:
             return await self._page.evaluate(
-                "() => (document && document.documentElement && document.documentElement.dataset)"
-                    and "((document.documentElement.dataset.qcuDocGen) || null)"
+                "() => performance.timeOrigin"
             )
         except Exception:
             return None
@@ -1192,6 +1223,8 @@ class WebA11yLayer(Layer):
         matches the live document and must not be replayed — clicking it would
         target whatever element happens to reuse that index on the new page.
         """
+        if self._refs.generation:
+            return self._observed_page is self._page and self._refs.validate(ref, self._target_scope)[0]
         if not ref or ":" not in ref:
             # Legacy/unprefixed ref: only allow if no generation tracking is set
             # up (e.g. during a unit test that never observed).
@@ -1209,7 +1242,7 @@ class WebA11yLayer(Layer):
             return True
         # The latest observe set generation = current; an older observe has a
         # strictly smaller token.
-        return ref_gen >= current
+        return ref_gen == current
 
     # ------------------------------------------------------------------
     # DOM ref injection (best-effort, idempotent)
@@ -1263,101 +1296,42 @@ class WebA11yLayer(Layer):
 
     async def _ref_action(self, page: Any, atype: str, params: dict[str, Any]) -> LayerResult:
         ref = params.get("ref")
-        if not isinstance(ref, str):
-            if "x" in params and "y" in params:
-                x, y = float(params["x"]), float(params["y"])
-            else:
-                return LayerResult(ok=False, layer=self.name, message="click needs ref or x,y")
-            if atype == "double_click":
-                await page.mouse.dblclick(x, y)
-            elif atype == "hover":
-                await page.mouse.move(x, y)
-            else:
-                await page.mouse.click(x, y)
-            return LayerResult(ok=True, layer=self.name, message=f"{atype} at ({x},{y})")
-
-        cached = self._last_refs.get(ref)
-        if cached is None:
-            return LayerResult(
-                ok=False, layer=self.name, message=f"unknown ref {ref!r}; re-run `qcu observe`"
-            )
-
-        # Stale ref: this ref was issued by an older observation; the page has
-        # since changed (navigation/history move). Reusing it would silently
-        # target whatever element reuses its index on the current page.
-        if not self._ref_current(ref):
-            return LayerResult(
-                ok=False,
-                layer=self.name,
-                message=f"stale ref {ref!r}; re-run `qcu observe` before acting",
-                data={"reason": "stale_ref"},
-            )
-
-        # Re-inject if needed (cross-process DOM reset).
-        await self._ensure_ref_injected(page, ref)
-
-        # Prefer DOM-locator click (robust to layout shift). Capture and
-        # classify the failure reason instead of swallowing it — a strict-mode
-        # ambiguity, a timeout, or a hidden/disabled target must not be silently
-        # converted into a coordinate click on a possibly different element.
-        loc = page.locator(f"[data-llm-ref={json.dumps(ref)}]")
-        locator_count = 0
-        try:
-            locator_count = await loc.count()
-        except Exception:
-            locator_count = 0
-        if locator_count > 0:
+        if ref is None:
+            if not all(_valid_coordinate(params.get(k)) for k in ("x", "y")):
+                return LayerResult(False, self.name, "click needs ref or finite x,y")
             try:
-                if atype == "double_click":
-                    await loc.dblclick()
-                elif atype == "hover":
-                    await loc.hover()
-                else:
-                    await loc.click()
-                return LayerResult(ok=True, layer=self.name, message=f"{atype} ref={ref} (via locator)")
-            except Exception as e:  # noqa: BLE001
-                reason = _locator_failure(e)
-                # Only fall back to coordinates when we have valid geometry that
-                # belongs to THIS observation (cached.cx stamps the generation).
-                cx, cy = cached.get("cx"), cached.get("cy")
-                if cx is None or cy is None:
-                    return LayerResult(
-                        ok=False,
-                        layer=self.name,
-                        message=f"{atype} ref={ref} failed via locator ({reason}); no coordinate fallback",
-                        data={"reason": reason, "locator_present": True},
-                    )
-                # Surface the degradation rather than hiding it.
-                try:
-                    await self._act_by_coord(page, atype, cx, cy)
-                except Exception as e2:  # noqa: BLE001
-                    return LayerResult(
-                        ok=False,
-                        layer=self.name,
-                        message=f"{atype} ref={ref} locator={reason}, coord fallback failed: {e2}",
-                        data={"reason": reason, "coord_fallback": True},
-                    )
-                return LayerResult(
-                    ok=True,
-                    layer=self.name,
-                    message=f"{atype} ref={ref} (coord fallback after locator {reason})",
-                    data={"reason": reason, "coord_fallback": True},
-                )
-
-        cx, cy = cached.get("cx"), cached.get("cy")
-        if cx is None or cy is None:
-            return LayerResult(
-                ok=False, layer=self.name, message=f"ref {ref!r} has no geometry; try `qcu observe` again"
-            )
-        if atype == "double_click":
-            await page.mouse.dblclick(cx, cy)
-        elif atype == "hover":
-            await page.mouse.move(cx, cy)
-        else:
-            await page.mouse.click(cx, cy)
-        return LayerResult(
-            ok=True, layer=self.name, message=f"{atype} ref={ref} (via coord)"
-        )
+                await self._act_by_coord(page, atype, float(params["x"]), float(params["y"]))
+            except Exception as exc:
+                return LayerResult(False, self.name, str(exc), data={"reason": "outcome_unknown"},
+                                   dispatch_state="unknown")
+            return LayerResult(True, self.name, f"{atype} coordinates sent", dispatch_state="sent")
+        if not isinstance(ref, str) or ref not in self._last_refs:
+            return LayerResult(False, self.name, "unknown ref; re-run `qcu observe`",
+                               data={"reason": "unknown_ref"})
+        if not self._ref_current(ref):
+            return LayerResult(False, self.name, "stale ref; re-run `qcu observe`",
+                               data={"reason": "stale_ref"})
+        # Missing annotations are stale evidence. Do not re-inject a recycled
+        # CDP ID or click the former location of a disappeared control.
+        loc = page.locator(f"[data-llm-ref={json.dumps(ref)}]")
+        try:
+            if await loc.count() != 1:
+                return LayerResult(False, self.name, "ref is missing or ambiguous; observe again",
+                                   data={"reason": "invalid_ref"})
+        except Exception as exc:
+            return LayerResult(False, self.name, str(exc), data={"reason": "reference_check_unavailable"})
+        try:
+            if atype == "double_click":
+                await loc.dblclick()
+            elif atype == "hover":
+                await loc.hover()
+            else:
+                await loc.click()
+        except Exception as exc:
+            return LayerResult(False, self.name, f"locator failed: {_locator_failure(exc)}",
+                               data={"reason": "outcome_unknown", "cause": _locator_failure(exc),
+                                     "coord_fallback": False}, dispatch_state="unknown")
+        return LayerResult(True, self.name, f"{atype} ref={ref} (via locator)", dispatch_state="sent")
 
     async def _act_by_coord(self, page: Any, atype: str, cx: float, cy: float) -> None:
         if atype == "double_click":
@@ -1383,10 +1357,18 @@ class WebA11yLayer(Layer):
                 y = y if y is not None else nested.get("y")
         ref = params.get(ref_key)
         if (x is None or y is None) and isinstance(ref, str):
-            cached = self._last_refs.get(ref)
-            if cached is not None:
-                x = cached.get("cx") if x is None else x
-                y = cached.get("cy") if y is None else y
+            if ref not in self._last_refs or not self._ref_current(ref):
+                return None, None
+            loc = self._page.locator(f"[data-llm-ref={json.dumps(ref)}]")
+            try:
+                if await loc.count() != 1:
+                    return None, None
+                box = await loc.bounding_box()
+                if not box:
+                    return None, None
+                x, y = box["x"] + box["width"]/2, box["y"] + box["height"]/2
+            except Exception:
+                return None, None
         if x is None or y is None:
             return None, None
         return float(x), float(y)
@@ -1423,7 +1405,8 @@ class WebA11yLayer(Layer):
                     await page.wait_for_timeout(int(step_sleep * 1000))
             await page.mouse.up()
         except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}")
+            return LayerResult(ok=False, layer=self.name, message=f"{type(e).__name__}: {e}",
+                               data={"reason": "outcome_unknown"}, dispatch_state="unknown")
         return LayerResult(
             ok=True, layer=self.name,
             message=f"drag ({x1:.0f},{y1:.0f})→({x2:.0f},{y2:.0f}) over {duration:.2f}s",
@@ -1431,77 +1414,32 @@ class WebA11yLayer(Layer):
         )
 
     async def _fill(self, page: Any, params: dict[str, Any]) -> LayerResult:
-        ref = params.get("ref")
-        text = params.get("text", "")
-        if not isinstance(ref, str):
-            return LayerResult(ok=False, layer=self.name, message="fill needs params.ref")
-
-        cached = self._last_refs.get(ref)
-        if cached is None:
-            return LayerResult(
-                ok=False, layer=self.name, message=f"unknown ref {ref!r}; re-run `qcu observe`"
-            )
+        ref, text = params.get("ref"), params.get("text", "")
+        if not isinstance(ref, str) or ref not in self._last_refs:
+            return LayerResult(False, self.name, "unknown ref; re-run `qcu observe`",
+                               data={"reason": "unknown_ref"})
         if not self._ref_current(ref):
-            return LayerResult(
-                ok=False,
-                layer=self.name,
-                message=f"stale ref {ref!r}; re-run `qcu observe` before acting",
-                data={"reason": "stale_ref"},
-            )
-
-        # Re-inject the attribute so the locator can find the node.
-        await self._ensure_ref_injected(page, ref)
-
-        # Primary path: locator.fill() (sets the value AND fires input events).
-        # Classify failures so we don't silently downgrade a strict-mode /
-        # disabled-field error into a coordinate keyboard fill.
+            return LayerResult(False, self.name, "stale ref; re-run `qcu observe`",
+                               data={"reason": "stale_ref"})
         loc = page.locator(f"[data-llm-ref={json.dumps(ref)}]")
-        locator_count = 0
         try:
-            locator_count = await loc.count()
+            if await loc.count() != 1:
+                return LayerResult(False, self.name, "ref is missing or ambiguous; observe again",
+                                   data={"reason": "invalid_ref"})
+        except Exception as exc:
+            return LayerResult(False, self.name, str(exc), data={"reason": "reference_check_unavailable"})
+        try:
+            await loc.fill(str(text))
+        except Exception as exc:
+            return LayerResult(False, self.name, f"fill locator failed: {_locator_failure(exc)}",
+                               data={"reason": "outcome_unknown", "cause": _locator_failure(exc),
+                                     "coord_fallback": False}, dispatch_state="unknown")
+        try:
+            value = await loc.evaluate("el => el.isContentEditable ? el.textContent : el.value")
+            verified = value == str(text)
         except Exception:
-            locator_count = 0
-        if locator_count > 0:
-            try:
-                await loc.fill(str(text))
-                return LayerResult(
-                    ok=True,
-                    layer=self.name,
-                    message=f"filled ref={ref} with {len(str(text))} chars (locator)",
-                )
-            except Exception as e:  # noqa: BLE001
-                reason = _locator_failure(e)
-                cx, cy = cached.get("cx"), cached.get("cy")
-                if cx is None or cy is None:
-                    return LayerResult(
-                        ok=False,
-                        layer=self.name,
-                        message=f"fill ref={ref} failed via locator ({reason}); no coordinate fallback",
-                        data={"reason": reason, "locator_present": True},
-                    )
-                # fall through to coord fallback but record the downgrade
-
-        # Fallback path: click at cached coords, select-all, type via keyboard.
-        # Works for any field even if the DOM annotation didn't survive.
-        cx, cy = cached.get("cx"), cached.get("cy")
-        if cx is None or cy is None:
-            return LayerResult(
-                ok=False,
-                layer=self.name,
-                message=f"ref {ref!r} not in DOM and has no geometry; try `qcu observe` again",
-            )
-        try:
-            await page.mouse.click(cx, cy)
-            # Select-all + type. Works for inputs, textareas, contentEditable.
-            mod = "Meta" if _is_mac() else "Control"
-            await page.keyboard.press(f"{mod}+A")
-            await page.keyboard.press("Delete")
-            if text:
-                await page.keyboard.type(str(text))
-            return LayerResult(
-                ok=True,
-                layer=self.name,
-                message=f"filled ref={ref} with {len(str(text))} chars (coord+keyboard)",
-            )
-        except Exception as e:  # noqa: BLE001
-            return LayerResult(ok=False, layer=self.name, message=f"fill fallback failed: {e}")
+            verified = False
+        return LayerResult(verified, self.name, "fill value confirmed (locator)" if verified else "fill sent; value unconfirmed",
+                           data={"effect_verified": verified,
+                                 "verification": {"verified": verified, "kind": "value", "expected": str(text)}},
+                           dispatch_state="sent", outcome="verified" if verified else "unknown")
