@@ -3,6 +3,43 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.9] — 2026-09-18
+
+Harden the AX enhanced-UI unlock on macOS, and add the Electron/CEF CDP bridge.
+
+- `desktop_ax` now checks the `AXEnhancedUserInterface` set result instead of
+  swallowing it: a failed set is no longer cached, is retried on the next
+  observe, and is reported per-observation as `routing_meta.enhanced_ui`.
+- Fall back to `AXManualAccessibility` when the enhanced set is rejected
+  (Chromium/Electron honor both), and disprove a rejected set by reading the
+  attribute back — newer macOS builds return kAXErrorNotImplemented for the
+  set while the flag is already True.
+- Set the flags before reading windows/children so the first observe of a
+  Catalyst/WebKit app already benefits.
+- Real-machine verification: App Store (Catalyst) exposes full window content;
+  Cursor and Qianwen (Electron) accept the flags but keep renderer a11y off at
+  runtime — documented as a known limit, which the CDP bridge now covers.
+- New `desktop_cdp` layer: attach to an Electron/CEF app launched with
+  `--remote-debugging-port` and drive its full DOM through the web engine
+  (`qcu observe --layer desktop_cdp --pid <pid>`). Discovery probes only the
+  bound pid's own listening ports; page selection refuses ambiguous guesses;
+  the app is never launched, navigated or closed; follow-up actions stay on
+  the bridge via the `desktop_cdp_bridge` router rule; plain web requests
+  detach the binding explicitly.
+- Real-machine verification (Cherry Studio, disposable profile): full DOM
+  observed where AX showed menu bar only; fill dispatched and confirmed by
+  locator read-back; verification mismatches on rich editors reported
+  honestly as `outcome=unknown`.
+- New `desktop_jsbridge` layer plus `examples/QCUWebViewBridge.swift`: WKWebView
+  content is not externally automatable (verified on macOS 26 — no
+  webinspectord; Safari remote inspection needs private entitlements and
+  manual GUI). Apps the owner controls embed the one-line bridge; QCU then
+  observes and drives the DOM over a loopback-only, token-authenticated
+  endpoint with honest dispatch/verification semantics.
+- Real-machine verification (probe app with the reference bridge): all DOM
+  controls observed; fill reached `outcome=verified` on its value; a click
+  was verified via its page-text result.
+
 ## [1.8] — 2026-09-16
 
 Control reliability and platform foundation. **Windows real device unverified.**

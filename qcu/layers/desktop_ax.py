@@ -192,6 +192,86 @@ class DesktopAXLayer(Layer):
         return self._cached_trusted
 
     # ------------------------------------------------------------------
+    # Enhanced-UI unlock (Catalyst/WebKit and Chromium/Electron trees)
+    # ------------------------------------------------------------------
+
+    def _ax_set_attr(self, elem: Any, attr: str, value: Any) -> int:
+        """Set one AX attribute and return the raw AXError code (0 == success).
+
+        Kept as a one-line seam so tests can substitute a fake setter without
+        stubbing the whole ApplicationServices module.
+        """
+        from ApplicationServices import AXUIElementSetAttributeValue
+        return int(AXUIElementSetAttributeValue(elem, attr, value))
+
+    def _ax_get_attr(self, elem: Any, attr: str) -> tuple[int, Any]:
+        """Read one AX attribute; returns ``(AXError, value)``. Test seam."""
+        from ApplicationServices import AXUIElementCopyAttributeValue
+        return _ax_get(AXUIElementCopyAttributeValue, elem, attr)
+
+    def _ensure_enhanced_ui(self, app: Any, pid: int) -> dict[str, Any]:
+        """Best-effort unlock of the target app's full AX tree.
+
+        Catalyst/WebKit apps (Notes, App Store, Music, TV) and Chromium/
+        Electron apps expose little or no window content until a client
+        asserts ``AXEnhancedUserInterface``; Chromium additionally honors
+        ``AXManualAccessibility`` to keep accessibility enabled. This is the
+        same flag VoiceOver flips on — setting it is standard AX-client
+        behavior, not a workaround.
+
+        The pid is cached in ``self._enhanced_apps`` ONLY after the unlock is
+        confirmed (a set succeeded, or a rejected set is disproved by a
+        read-back showing the flag already True — newer macOS builds return
+        kAXErrorNotImplemented for a set while the attribute is already on).
+        A genuinely failed unlock is NOT cached: the next observe retries.
+        The returned status dict is surfaced in routing_meta so a sparse tree
+        can be attributed to a failed unlock instead of being misreported as
+        "the app has no controls".
+        """
+        if pid in self._enhanced_apps:
+            return {"status": "already_set"}
+        try:
+            err = self._ax_set_attr(app, "AXEnhancedUserInterface", True)
+        except Exception as exc:  # noqa: BLE001 — pyobjc missing or broken
+            return {"status": "unavailable", "error": f"{type(exc).__name__}: {exc}"}
+        # Chromium/Electron honor BOTH flags: some builds reject
+        # AXEnhancedUserInterface (kAXErrorNotImplemented -25208) yet still
+        # accept AXManualAccessibility. A rejected enhanced set must not skip
+        # the manual attempt.
+        try:
+            manual_err: Optional[int] = self._ax_set_attr(app, "AXManualAccessibility", True)
+        except Exception:  # noqa: BLE001 — best-effort secondary flag
+            manual_err = None
+        if err != 0 and manual_err != 0:
+            # Both sets rejected. Before declaring failure, read the enhanced
+            # flag back: on newer macOS the set returns kAXErrorNotImplemented
+            # even though the attribute is already True (e.g. Cursor reads
+            # back True after rejecting the set with -25208).
+            try:
+                gerr, current = self._ax_get_attr(app, "AXEnhancedUserInterface")
+            except Exception:  # noqa: BLE001
+                gerr, current = -1, None
+            if gerr == 0 and bool(current):
+                self._enhanced_apps.add(pid)
+                return {"status": "enabled", "via": "already_true",
+                        "enhanced_ui_error": err,
+                        "manual_accessibility_error": manual_err}
+            meta = {"status": "failed", "ax_error": err}
+            if manual_err is not None:
+                meta["manual_accessibility_error"] = manual_err
+            return meta
+        self._enhanced_apps.add(pid)
+        meta = {"status": "enabled"}
+        if err != 0:
+            # Unlocked via AXManualAccessibility alone; keep the enhanced
+            # error visible so a still-sparse tree stays attributable.
+            meta["via"] = "AXManualAccessibility"
+            meta["enhanced_ui_error"] = err
+        elif manual_err:
+            meta["manual_accessibility_error"] = manual_err
+        return meta
+
+    # ------------------------------------------------------------------
     # Observation
     # ------------------------------------------------------------------
 
@@ -310,6 +390,11 @@ class DesktopAXLayer(Layer):
         front = candidates[0]
         app = AXUIElementCreateApplication(front.processIdentifier())
         self._target_app = str(front.localizedName() or wanted_app or "")
+        # Unlock the app's accessibility tree BEFORE reading windows/children:
+        # Catalyst/WebKit and Chromium/Electron apps expose little or no window
+        # content over AX until a client asserts the enhanced-UI flags, so the
+        # very first observe of such an app must set them up front.
+        enhanced_meta = self._ensure_enhanced_ui(app, int(front.processIdentifier()))
         prior_scope = self._target_scope
         scope = {"pid": int(front.processIdentifier()), "app": self._target_app}
         self._target_window = None
@@ -353,22 +438,6 @@ class DesktopAXLayer(Layer):
             terr, tval = _ax_get(AXUIElementCopyAttributeValue, app, kAXTitleAttribute)
             if terr == 0 and tval:
                 title = str(tval)
-        except Exception:
-            pass
-
-        # Enable AXEnhancedUserInterface on the target app. Catalyst/WebKit apps
-        # (Notes, App Store, Music, TV) only expose their full window content
-        # (text areas, buttons, search fields) when this flag is True; without
-        # it they show just the menu bar and a self-referencing AXApplication
-        # node, making the window content invisible to AX. This is the same flag
-        # VoiceOver flips on; setting it is standard AX-client behavior.
-        # WriteOnce per pid to avoid the (small) cost of repeated sets.
-        try:
-            app_pid = front.processIdentifier()
-            if app_pid not in self._enhanced_apps:
-                from ApplicationServices import AXUIElementSetAttributeValue
-                AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface", True)
-                self._enhanced_apps.add(app_pid)
         except Exception:
             pass
 
@@ -668,6 +737,7 @@ class DesktopAXLayer(Layer):
                 "target": dict(self._target_scope),
                 "ref_scope": self._refs.scope,
                 "capabilities": self.capabilities(),
+                "enhanced_ui": enhanced_meta,
                 "empty_tree_reason": None if elements else "no_controls_observed; provider may be incomplete or inaccessible",
                 "n_refs": len(elements),  # total in this observation
                 "n_returned": page_meta["n_returned"],

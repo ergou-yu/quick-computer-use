@@ -53,6 +53,26 @@ is used to resolve uncertainty. `fill` reads the exact value back. Generic AX
 signal changes are UI evidence; use `verify` to confirm a requested result.
 Explicit `double_click` retains its two-click meaning.
 
+Every observe attempts to unlock the target's full AX tree by asserting
+`AXEnhancedUserInterface` and `AXManualAccessibility` on the application
+element (standard AX-client behavior; VoiceOver does the same). The outcome is
+reported per-observation as `routing_meta.enhanced_ui`:
+
+- `enabled` — set succeeded (`via` says which flag, or `already_true` when the
+  set was rejected but the flag read back True, as newer macOS builds do).
+- `already_set` — confirmed earlier in this backend lifetime (cached per pid).
+- `failed` — both flags rejected and read-back shows the flag off; NOT cached,
+  so the next observe retries. Treat a sparse tree as possibly unlock-related.
+- `unavailable` — the AX call itself could not be made.
+
+The unlock is effective for Catalyst/WebKit apps (verified on App Store: full
+window content — search box, links, tab controls — becomes readable). It is
+NOT sufficient for modern Chromium/Electron apps: real-machine probes against
+Cursor and Qianwen show both flags accepted/already-true while the renderer
+still exposes no window content at runtime. For those apps use the CDP route
+(attach with `--remote-debugging-port` or relaunch with
+`--force-renderer-accessibility`); AX alone cannot see their DOM.
+
 Quartz keyboard/scroll/coordinate paths need a matching foreground target and
 live window ownership. `--strict-background` rejects focus-stealing operations
 and detects foreground drift; it is not background keyboard delivery.
@@ -80,6 +100,81 @@ Apple Events is an explicit read-only compatibility observer in this preview.
 Its positional control references and incomplete scope contract do not satisfy
 the action guarantees. Its `act` returns unsupported/read-only before sending;
 `--pid`/`--window` are rejected rather than ignored. Observe with AX for actions.
+
+## Electron/CEF via the CDP bridge (`desktop_cdp`)
+
+Real-machine probes (1.9): modern Chromium/Electron apps keep renderer
+accessibility off at runtime — asserting `AXEnhancedUserInterface` /
+`AXManualAccessibility` is accepted but the AX tree still exposes only the
+menu bar (verified on Cursor and Qianwen). When the app was launched with
+`--remote-debugging-port=<port>`, the CDP bridge attaches to that endpoint and
+reuses the web engine, yielding the app's full DOM (controls, values, refs,
+fill/click/verify) at web speed instead of screenshots.
+
+```bash
+qcu observe --layer desktop_cdp --pid 12345 [--window 'title filter'] --compact
+qcu act '{"type":"fill","params":{"ref":"…","value":"…"}}'   # router stays on desktop_cdp
+```
+
+Guarantees and limits:
+
+- Discovery probes only TCP ports the *bound pid* listens on, and each must
+  answer `/json/version` with a debugger URL. No host-wide port scan; a
+  missing endpoint reports `no_listening_ports`/`no_cdp_endpoint` plus a
+  relaunch hint — never a substituted target.
+- Page selection refuses to guess: a `--window` title filter must match
+  exactly one page; zero/multiple matches list the available titles.
+- The bridge never launches, relaunches, navigates or closes the user's app;
+  `close()` drops only the local driver. A plain web observe/act detaches the
+  binding explicitly before touching QCU's own browser.
+- Follow-up actions stay on the bridge (router rule `desktop_cdp_bridge`);
+  bridged observations persist as desktop context so refs and routing agree.
+- Known web-engine caveat, not bridge-specific: on rich editors a `verify`
+  condition may miss a successful fill — `inner_text` excludes live textarea
+  values, and a ref tagged on a wrapper container reads no `value`. The fill's
+  own locator read-back still confirms the write; treat `outcome=unknown`
+  there as a verification gap, not a failed fill.
+- Requires the daemon (default) so the attach survives across CLI calls.
+
+## WKWebView via the embedded JS bridge (`desktop_jsbridge`)
+
+Feasibility finding (macOS 26, 1.9): WKWebView content cannot be automated
+from outside the process. AX shows only the `AXWebArea` shell; the
+`AXEnhancedUserInterface`/`AXManualAccessibility` unlock does not reach the
+DOM; and Apple's remote-inspection path has no programmatic client — no
+`webinspectord` binary exists on this macOS, and Safari's Develop menu
+requires private entitlements plus manual GUI steps.
+
+For apps the owner controls, `examples/QCUWebViewBridge.swift` is a ~150-line
+reference bridge: one line (`QCUWebViewBridge.shared.attach(webView)`) serves
+a loopback-only, token-authenticated evaluate endpoint and publishes
+`$QCU_BRIDGE_DIR/<pid>.json` (default `~/.qcu/bridges/`). QCU then drives the
+webview's DOM with full semantics:
+
+```bash
+qcu observe --layer desktop_jsbridge --pid 12345 --compact
+qcu act '{"type":"fill","params":{"ref":"…","value":"…","verify":{"kind":"value","ref":"…","equals":"…"}}}'
+```
+
+Guarantees and limits:
+
+- Discovery trusts only a bridge file naming the bound pid, in the bridge
+  directory, whose advertised port answers `/qcu/info`; each outcome
+  (`pid_not_running`, `no_bridge_file` + embed hint, `bridge_file_invalid`,
+  `bridge_not_responding`) is reported distinctly. No target substitution.
+- The Swift side binds loopback only and requires the per-launch random token
+  (`X-QCU-Token` header) for every evaluate; the bridge file is removed
+  atexit so stale ports are never advertised.
+- Actions (`click`/`fill`/`hover`) report `sent` only when the JS dispatched;
+  a vanished element is `stale_ref`/`not_sent`; a JS dispatch exception is
+  `outcome_unknown` with `retry_safe=false`. `verify` conditions are read back
+  from the live DOM (`value`/`checked`/`selected`/`text`).
+- Follow-up actions stay on the bridge (router rule `desktop_jsbridge_keep`).
+- Sandboxed apps: their home is the container — set `QCU_BRIDGE_DIR` to a
+  shared path (e.g. an app group) on both sides.
+- Real-machine verification (probe app embedding the reference bridge):
+  observe listed all DOM controls; fill verified its own value; a click was
+  confirmed by its page-text result — all `outcome=verified`.
 
 ## Windows UIA minimum — Windows 真机未验证
 

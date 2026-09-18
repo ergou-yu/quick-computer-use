@@ -170,6 +170,20 @@ RULES: list[Rule] = [
         "desktop_appleevents", "Keep the explicitly observed Apple Events target.",
     ),
     (
+        # An Electron/CEF app bridged over CDP: follow-up actions must stay on
+        # the bridge (its refs are web_a11y DOM refs), never drop to AX menus.
+        67, "desktop_cdp_bridge",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "observed_layer") == "desktop_cdp",
+        "desktop_cdp", "Keep the explicitly observed CDP-bridged app target.",
+    ),
+    (
+        # A WKWebView app with the embedded JS bridge: follow-up actions must
+        # stay on the bridge (its refs are data-qcu-ref DOM refs).
+        67, "desktop_jsbridge_keep",
+        lambda f: _f(f, "context") == "desktop" and _f(f, "observed_layer") == "desktop_jsbridge",
+        "desktop_jsbridge", "Keep the explicitly observed JS-bridged app target.",
+    ),
+    (
         66, "desktop_webview_blind",
         lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_ax"
         and ((_f(f, "has_web_area") and int(_f(f, "n_interactive", 0)) < 8) or _f(f, "has_web_app")),

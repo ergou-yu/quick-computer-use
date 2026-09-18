@@ -79,6 +79,22 @@ def _ensure_daemon_started() -> Optional[tuple[int, int]]:
     return pid, port
 
 
+def _detach_external_if_plain_web(chosen_layer: str) -> None:
+    """A plain web_a11y request means QCU's own browser — never an Electron
+    app left attached by desktop_cdp. Drop a stale external binding explicitly
+    instead of letting the web call silently drive the user's desktop app.
+    """
+    if chosen_layer != "web_a11y":
+        return
+    try:
+        from qcu.layers.runtime import get_layer
+        web = get_layer("web_a11y")
+        if getattr(web, "_external", None):
+            web.detach_external()
+    except Exception:  # noqa: BLE001 — detach is best-effort; observe reports real state
+        pass
+
+
 def _maybe_route_via_daemon(method: str, params: dict[str, Any]) -> Optional[int]:
     """If a daemon is up, send the request to it and replay its response.
 
@@ -499,6 +515,7 @@ def observe(
     from qcu.layers.runtime import get_layer
 
     L = get_layer(chosen_layer)
+    _detach_external_if_plain_web(chosen_layer)
     t0 = time.perf_counter()
     obs = L.observe(
         max_depth=max_depth,
@@ -800,6 +817,7 @@ def act(action_json: str, layer: Optional[str]) -> int:
         from qcu.common.types import LayerResult
         print(LayerResult(False, chosen_layer, str(e), data={"reason": "backend_unavailable"}).to_json())
         return 2
+    _detach_external_if_plain_web(chosen_layer)
     try:
         result = L.act(action)
     except Exception as e:  # noqa: BLE001

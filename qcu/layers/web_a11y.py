@@ -113,6 +113,30 @@ def _is_same_origin(base: str, href: str) -> bool:
         return False
 
 
+def _select_external_page(pages: list[tuple[Any, str]], title_hint: str) -> tuple[Optional[Any], Optional[dict[str, Any]]]:
+    """Choose exactly one page from an external CDP app's page list.
+
+    ``pages`` is ``[(page, title), ...]``. Returns ``(page, None)`` on a unique
+    match, ``(None, error_dict)`` otherwise — zero matches and multiple matches
+    both refuse to guess, listing the available titles.
+    """
+    hint = (title_hint or "").casefold().strip()
+    if hint:
+        matched = [(p, t) for p, t in pages if hint in (t or "").casefold()]
+    else:
+        matched = list(pages)
+    titles = [t for _, t in pages]
+    if len(matched) == 1:
+        return matched[0][0], None
+    if not matched:
+        return None, {"reason": "page_not_found",
+                      "message": f"No page title contains {title_hint!r}.",
+                      "pages": titles}
+    return None, {"reason": "ambiguous_page",
+                  "message": "Multiple pages match; pass a unique --window title.",
+                  "pages": titles}
+
+
 @register("web_a11y")
 class WebA11yLayer(Layer):
     name = "web_a11y"
@@ -136,6 +160,10 @@ class WebA11yLayer(Layer):
         # ever terminating a shared browser.
         self._owns_browser = False
         self._cdp_port: Optional[int] = None  # port of the daemon we connected to
+        # External CDP target (Electron/CEF app attached via desktop_cdp). When
+        # set, _ensure_browser attaches to this endpoint instead of the QCU
+        # daemon, and NEVER auto-navigates the app's page.
+        self._external: Optional[dict[str, Any]] = None
         # Native/CDP handles never survive a backend lifecycle. Observe again
         # after a daemon restart; persisted refs are only routing diagnostics.
 
@@ -166,6 +194,12 @@ class WebA11yLayer(Layer):
         is exactly the "screenshot grabbed an old page" bug.
         """
         if self._page is not None:
+            return
+        if self._external is not None:
+            # External Electron/CEF attach: connect to the app's own CDP
+            # endpoint. Never launches a browser, never touches the QCU
+            # daemon's session fields, never auto-navigates the app's page.
+            self._connect_external()
             return
         try:
             from playwright.async_api import async_playwright
@@ -298,6 +332,11 @@ class WebA11yLayer(Layer):
         """
         if self._page is None or self._loop is None:
             return
+        if self._external is not None:
+            # An attached Electron/CEF page is the user's live app UI, not a
+            # QCU-owned browser tab: auto-navigating it to a stale session URL
+            # would wreck the app's state. Never rewind external targets.
+            return
         from qcu.session import load as _load
 
         s = _load()
@@ -398,6 +437,88 @@ class WebA11yLayer(Layer):
             self._browser = None
             self._context = None
             self._cdp = None
+
+    # ------------------------------------------------------------------
+    # External CDP attach (Electron/CEF bridge used by desktop_cdp)
+    # ------------------------------------------------------------------
+
+    def attach_external_cdp(self, endpoint: str, *, pid: Optional[int] = None,
+                            app: Optional[str] = None, title_hint: str = "") -> dict[str, Any]:
+        """Attach to an external Chromium-family app (Electron/CEF) over CDP.
+
+        Idempotent per target: re-attaching the same endpoint with a live page
+        is a no-op. Switching targets tears down only the LOCAL connection —
+        the external app is never closed. Returns a target descriptor dict on
+        success; raises ``RuntimeError`` with a structured message on failure.
+        """
+        if (self._external is not None
+                and self._external.get("endpoint") == endpoint
+                and self._external.get("title_hint", "") == (title_hint or "")
+                and self._page is not None and not self._page.is_closed()):
+            return dict(self._external)
+        # Drop any previous connection (local driver only), then bind anew.
+        self._closed = False
+        self.close()
+        self._closed = False
+        self._external = {"endpoint": endpoint, "pid": pid, "app": app,
+                          "title_hint": title_hint or ""}
+        try:
+            self._ensure_browser()
+        except Exception:
+            # A failed attach must not leave a half-bound external target that
+            # later web calls would misread as their own daemon browser.
+            self._external = None
+            raise
+        return dict(self._external)
+
+    def detach_external(self) -> None:
+        """Undo attach_external_cdp: drop the local connection and binding."""
+        if self._external is None:
+            return
+        self._external = None
+        self.close()
+        self._closed = False
+
+    def _connect_external(self) -> None:
+        assert self._external is not None
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError as e:
+            raise RuntimeError(
+                "playwright is required for the CDP bridge; "
+                "install with `pip install playwright && python -m playwright install chromium`"
+            ) from e
+        endpoint = self._external["endpoint"]
+        title_hint = self._external.get("title_hint", "")
+
+        self._loop = asyncio.new_event_loop()
+
+        async def _connect() -> None:
+            pw = await async_playwright().start()
+            self._playwright = pw
+            try:
+                self._browser = await pw.chromium.connect_over_cdp(endpoint)
+            except Exception as exc:
+                raise RuntimeError(f"cannot connect to CDP endpoint {endpoint}: {exc}") from exc
+            pages = [p for ctx in self._browser.contexts for p in ctx.pages]
+            titles = await asyncio.gather(
+                *(p.title() for p in pages), return_exceptions=True,
+            )
+            pairs = [(p, t if isinstance(t, str) else "") for p, t in zip(pages, titles)]
+            chosen, error = _select_external_page(pairs, title_hint)
+            if error is not None:
+                raise RuntimeError(json.dumps(error, ensure_ascii=False))
+            assert chosen is not None
+            self._context = chosen.context
+            self._page = chosen
+            cdp = await self._context.new_cdp_session(chosen)
+            await cdp.send("Accessibility.enable")
+            await cdp.send("DOM.enable")
+            self._cdp = cdp
+
+        self._loop.run_until_complete(_connect())
+        self._cdp_port = urlparse(endpoint).port
+        self._owns_browser = False
 
     # ------------------------------------------------------------------
     # Observe
@@ -823,10 +944,14 @@ class WebA11yLayer(Layer):
             # Keep current_url in sync with the live page, advance the
             # observation generation, and persist the refs in one transaction.
             # Skip data:/blob: URLs which aren't replayable.
+            # Bridged Electron/CEF targets (external CDP attach) persist as
+            # context=desktop with layer=desktop_cdp so the router keeps
+            # follow-up actions on the bridge instead of misreading the
+            # observation as a plain web page.
             replay_url = url if url and not url.startswith(("data:", "blob:")) else None
             record_observation(
                 {
-                    "context": "web",
+                    "context": "desktop" if self._external else "web",
                     "url_or_app": url,
                     "title": title,
                     "elements": [e.ref for e in elements],
@@ -834,8 +959,12 @@ class WebA11yLayer(Layer):
                     "requested_depth": requested_depth,
                     "deepest_depth": deepest_seen,
                     "adaptive_used": adaptive_used,
+                    **({"routing_meta": {"layer": "desktop_cdp",
+                                         "cdp": {"endpoint": self._external["endpoint"],
+                                                 "pid": self._external.get("pid")}}}
+                       if self._external else {}),
                 },
-                current_url=replay_url,
+                current_url=None if self._external else replay_url,
                 refs=serialized,
             )
         except Exception:

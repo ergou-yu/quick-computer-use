@@ -107,6 +107,23 @@ backend availability or absence of controls. Read errors/truncation matter.
 - **AX:** named controls and informational AX text; provider exposure and
   permission checks remain app-dependent. Sparse embedded web views may remain
   unreadable; their URLs do not authorize switching the browser target.
+- **CDP bridge (`desktop_cdp`):** Electron/CEF apps keep renderer a11y off at
+  runtime, so AX sees only the menu bar. When the app was launched with
+  `--remote-debugging-port`, `qcu observe --layer desktop_cdp --pid <pid>`
+  attaches to that port and drives the app's own DOM through the web engine —
+  full controls at web speed. The endpoint must belong to the bound pid; a
+  missing endpoint reports a relaunch hint. The app is never launched,
+  relaunched, navigated or closed by the bridge. A plain web request detaches
+  the bridge binding explicitly.
+- **JS bridge (`desktop_jsbridge`):** WKWebView apps are NOT externally
+  automatable — verified on macOS 26: no webinspectord, and Safari's
+  remote-inspection path needs private entitlements plus manual GUI steps. For
+  apps you control, embed `examples/QCUWebViewBridge.swift` (one line:
+  `QCUWebViewBridge.shared.attach(webView)`); then
+  `qcu observe --layer desktop_jsbridge --pid <pid>` reads and drives the DOM
+  with full semantics. The bridge serves loopback-only and every evaluate
+  call requires the per-launch token from the bridge file. A missing bridge
+  reports the embed hint — never a substituted target.
 - **UIA:** bounded single-window controls and four semantic patterns. No
   Windows screenshot, mouse/keyboard, secure desktop or complete parity claim.
   Run `scripts/verify_windows_uia.py` on real Windows before relying on it.
