@@ -86,7 +86,7 @@ def _build_parser() -> argparse.ArgumentParser:
     op.add_argument("--pid", type=int, default=None,
                     help="desktop: observe the app with this process id (most precise).")
     op.add_argument("--window", default=None,
-                    help="desktop: only walk the AXWindow whose title contains this substring, "
+                    help="desktop: select a window by title substring (or Windows HWND), "
                          "dropping the rest of the app tree. Cuts hundreds of elements down to "
                          "the target window's controls.")
 
@@ -103,11 +103,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # act
     ap = sub.add_parser("act", help="perform an action")
-    ap.add_argument("action", help="action JSON, e.g. '{\"type\":\"click\",\"params\":{\"ref\":\"ref_42\"}}'")
+    ap.add_argument("action", help="action JSON, or '-' to read UTF-8 JSON from stdin")
     ap.add_argument("--layer", default=None, help="force a specific layer")
 
     bp = sub.add_parser("batch", help="run observed form fills and one final action in one call")
-    bp.add_argument("actions", help="JSON array of 1..32 actions; only fills before the final action")
+    bp.add_argument("actions", help="JSON array of 1..32 actions, or '-' for stdin; only fills before the final action")
     bp.add_argument("--layer", default=None)
     bp.add_argument("--observe", action="store_true", help="return a fresh observation after execution")
     bp.add_argument("--compact", action="store_true", help="compact the final observation")
@@ -128,8 +128,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # doctor — macOS TCC permission diagnostic for the desktop path.
     dcp = sub.add_parser(
         "doctor",
-        help="probe macOS TCC permissions (Accessibility / Input Monitoring "
-        "/ Screen Recording) and surface missing ones",
+        help="report interpreter, dependencies and platform capabilities; probe macOS permissions",
     )
 
     return p
@@ -141,6 +140,11 @@ def _die(msg: str, code: int = 1) -> NoReturn:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if sys.platform == "win32":
+        # Pipes otherwise inherit ANSI code pages, losing Chinese/emoji JSON.
+        for stream in (sys.stdin, sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8")
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -205,9 +209,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "inspect":
             return h.inspect(args.ref, compact=getattr(args, "compact", False))
         if args.cmd == "act":
-            return h.act(args.action, layer=args.layer)
+            action = sys.stdin.read().lstrip("\ufeff") if args.action == "-" else args.action
+            return h.act(action, layer=args.layer)
         if args.cmd == "batch":
-            return h.batch(args.actions, layer=args.layer, observe_after=args.observe, compact=args.compact)
+            actions = sys.stdin.read().lstrip("\ufeff") if args.actions == "-" else args.actions
+            return h.batch(actions, layer=args.layer, observe_after=args.observe, compact=args.compact)
         if args.cmd == "route":
             return h.route(args.features)
         if args.cmd == "stats":

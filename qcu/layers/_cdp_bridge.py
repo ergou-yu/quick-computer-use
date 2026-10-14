@@ -53,7 +53,12 @@ def list_listening_ports(pid: int, *, runner: Runner = _default_runner) -> tuple
                         ports.append(int(port_part))
             return sorted(set(ports)), None
         if sys.platform == "win32":
-            res = runner(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True, timeout=10)
+            if runner is _default_runner:
+                from qcu.common.win32 import listening_ports
+                return listening_ports(pid), None
+            # Retain the injected parser seam for contract tests and tooling.
+            res = runner(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True,
+                         errors="replace", timeout=10)
             if res.returncode != 0:
                 return [], f"netstat exited {res.returncode}: {(res.stderr or '').strip()[:200]}"
             ports = []

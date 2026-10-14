@@ -1,4 +1,59 @@
-# QCU 1.8 测试报告（Test Report）
+# QCU 测试报告（Test Report）
+
+## 1.9.2 Windows 验证 — 2026-10-15
+
+环境：Windows 10 build 19045、Python 3.12、uiautomation 2.0.29、
+comtypes 1.4.17、Playwright 1.64.0、Chromium 156.0.8078.4。
+真机测试使用独立 `QCU_HOME`、一次性 WinForms 窗口及 Chromium profile。
+
+| 验证项 | 结果 |
+|---|---|
+| 完整回归套件 | **745 passed，57.29 秒，无失败或跳过** |
+| Windows 原生真机流程 | **26 条 CLI 命令，主流程通过**；包含按预期拒绝的请求及独立 SendInput 诊断 |
+| 原有 UIA 真机回归 | **6 项直接检查、16 条 CLI 命令通过** |
+| 打包与入口 | wheel/sdist、独立 wheel 安装、PowerShell/CMD JSON 管道及 skill 格式校验通过 |
+
+本次真机覆盖绑定 HWND 的 PrintWindow/GDI PNG、窗口移动后的物理像素原点、
+点击/双击/右键/悬停/滚轮/拖动、命名按键、标准 Edit Ctrl+A 选择读回、
+中文与 emoji 输入、截图 fallback、遮挡/前台/旧 ref 拒绝，以及原生操作后的语义填充。
+回归套件包含真实 Windows 进程/端口与 Chromium CDP 测试；本次 macOS 用例为
+contract/mock，不能视为 macOS 真机复测。
+
+**默认 HWND 消息通道已验证；物理 SendInput 在本机未确认投递。**
+独立 F7 探测返回接受两个事件，但窗口没有出现预期结果，记录为 `outcome:unknown`。
+原因未确定，没有换通道重发。26 条命令不是 26 次业务结果验证通过。
+安全桌面不支持；混合 DPI/多显示器组合未做真机验证。Raw Input/DirectInput、
+游戏、自绘或受保护窗口仍需逐目标验证。
+
+普通 UIA ref click/fill 保留直接 Pattern 调用；DOM/CDP、常驻 daemon、compact、
+缓存 find/inspect、有界 batch 与条件就绪保留。截图及原生输入按需加载，
+普通操作没有新增强制截图或固定等待。
+
+同一六字段网页表单，每个场景/模式三轮，共 12 个任务成功。
+统计 observe、fill、submit 与 verify 的 CLI 总耗时，排除导航、冷启动及模型推理。
+
+| 场景 | 逐条调用中位数 | batch 中位数 | 加速 | 调用次数 |
+|---|---:|---:|---:|---:|
+| 静态网页 | 3858 ms | 1231 ms | 3.14× | 9 → 3 |
+| 持续联网页面 | 3574 ms | 3091 ms | 1.16× | 9 → 3 |
+
+持续联网页面两轮 batch 的点击/验证阶段约 1.9 秒，存在等待抖动，原因未确定。
+这组小样本是 QCU 逐条调用与 batch 的对比，不是与常规 computer use 的同场测试，
+不支持对所有应用宣称固定速度优势。
+
+从源码根目录复跑（先按 [INSTALL.md](INSTALL.md) 安装 Windows 开发依赖）：
+
+```powershell
+& .\.venv\Scripts\python.exe -X utf8 -m pytest -q
+& .\.venv\Scripts\python.exe scripts\verify_windows_native.py --output native.json --check-send-input
+& .\.venv\Scripts\python.exe scripts\verify_windows_uia.py --output uia.json
+& .\.venv\Scripts\python.exe scripts\benchmark_ui.py --mode separate --rounds 3 --output separate.json
+& .\.venv\Scripts\python.exe scripts\benchmark_ui.py --mode batch --rounds 3 --output batch.json
+```
+
+---
+
+## 1.8 历史报告 — 2026-09-16
 
 > 测试日期：2026-09-16 · 版本：**qcu 1.8**（发布版）
 > 环境：macOS darwin 25.2.0（Apple Silicon，3456×2234 Retina）· Python 3.12.11（uv venv）

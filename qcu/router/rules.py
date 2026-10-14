@@ -172,14 +172,14 @@ RULES: list[Rule] = [
     (
         # An Electron/CEF app bridged over CDP: follow-up actions must stay on
         # the bridge (its refs are web_a11y DOM refs), never drop to AX menus.
-        67, "desktop_cdp_bridge",
+        71, "desktop_cdp_bridge",
         lambda f: _f(f, "context") == "desktop" and _f(f, "observed_layer") == "desktop_cdp",
         "desktop_cdp", "Keep the explicitly observed CDP-bridged app target.",
     ),
     (
         # A WKWebView app with the embedded JS bridge: follow-up actions must
         # stay on the bridge (its refs are data-qcu-ref DOM refs).
-        67, "desktop_jsbridge_keep",
+        71, "desktop_jsbridge_keep",
         lambda f: _f(f, "context") == "desktop" and _f(f, "observed_layer") == "desktop_jsbridge",
         "desktop_jsbridge", "Keep the explicitly observed JS-bridged app target.",
     ),
@@ -220,6 +220,9 @@ RULES: list[Rule] = [
         "No rule matched cleanly; fall back to screenshot + grounding.",
     ),
 ]
+
+# Sort once at import, keeping declared priorities authoritative on every OS.
+RULES.sort(key=lambda rule: rule[0], reverse=True)
 
 
 def default_layer() -> str:

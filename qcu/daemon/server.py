@@ -36,6 +36,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import sys
 import socket
 import socketserver
 from concurrent.futures import ThreadPoolExecutor
@@ -220,7 +221,7 @@ class _LoopbackTCPServer(socketserver.ThreadingTCPServer):
     affinity. This keeps asyncio loops and stdout capture from racing.
     """
 
-    allow_reuse_address = True
+    allow_reuse_address = sys.platform != "win32"
     daemon_threads = True
 
     def __init__(self, *args, **kwargs):
@@ -237,6 +238,8 @@ class _LoopbackTCPServer(socketserver.ThreadingTCPServer):
         # Force loopback — never expose the RPC endpoint beyond this machine.
         # It has no auth and grants full AX/CDP control.
         self.server_address = ("127.0.0.1", self.server_address[1])
+        if sys.platform == "win32":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
 
 

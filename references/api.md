@@ -1,4 +1,4 @@
-# QCU API — 1.8
+# QCU API — 1.9.2
 
 ## Target and observation
 

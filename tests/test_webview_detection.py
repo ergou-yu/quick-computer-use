@@ -18,9 +18,18 @@ end-to-end:
 
 from __future__ import annotations
 
+import pytest
+
 from qcu.common.types import Element, Observation
 from qcu.router.classifier import classify
 from qcu.router.features import extract
+
+
+@pytest.fixture(autouse=True)
+def macos_feature_fixture(monkeypatch):
+    from qcu.router import features
+    monkeypatch.setattr(features, "platform_name", lambda: "darwin")
+    monkeypatch.setattr(features, "desktop_backend_name", lambda: "desktop_ax")
 
 
 def _webview_shell_obs(*, n_interactive=2):

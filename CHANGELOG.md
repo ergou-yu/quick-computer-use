@@ -3,6 +3,42 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.9.2] — 2026-10-15
+
+- Add native bound-HWND PrintWindow/GDI capture with stdlib PNG output,
+  per-thread physical-pixel geometry, resource cleanup and capture diagnostics.
+- Add foreground/ownership-gated mouse and keyboard fallback: default HWND
+  messages, Unicode typing, keys/Edit Ctrl+A readback, click/double/right click,
+  hover, wheel and drag. Explicit SendInput remains available; transport never
+  switches or repeats after unknown dispatch.
+- Share UIA's persistent worker, identity/ref checks and result verification.
+  Ordinary semantic fills/clicks, DOM/CDP, compact/cached reads and batch paths
+  do not acquire screenshots, native dependencies or fixed delays.
+- Use matching pythonw for Windows resident daemon and source shims, avoiding
+  venv console allocation/focus theft while preserving JSON pipes.
+- Add separate mock contracts and a real WinForms native validation script.
+  The HWND route was verified; physical SendInput acceptance did not confirm
+  delivery on this host. Secure desktop/provider/DPI limits remain explicit.
+
+## [1.9.1] — 2026-10-14
+
+Windows compatibility with the existing fast semantic/DOM paths preserved.
+
+- Add PowerShell/CMD shims with local virtualenv selection and UTF-8 JSON stdin
+  (`act -`, `batch -`), including Windows PowerShell 5.1 pipeline support.
+- Replace tasklist liveness and JS bridge's unsafe Windows `os.kill(pid, 0)`
+  with nonblocking Win32 process-handle queries. Query CDP port ownership via
+  IPv4/IPv6 `GetExtendedTcpTable`, avoiding localized netstat output.
+- Keep explicit CDP/JS bridge routing above platform defaults and persist it
+  for subsequent reads, including `batch --observe`. Sort rules once by their
+  declared priorities. Use exclusive Windows TCP binds for daemon/port probes.
+- Preserve resident daemon state, compact/cached reads, bounded batches, direct
+  UIA patterns, DOM/CDP operations, readiness conditions and no-replay behavior.
+- Verify real Windows 10 WinForms direct/CLI semantic actions, Unicode, batches,
+  stale refs and restart; add real Windows Chromium CDP integration coverage.
+- Windows native screenshot, mouse/keyboard and secure-desktop support remain
+  outside this revision. UIA provider latency remains application-dependent.
+
 ## [1.9] — 2026-09-18
 
 Harden the AX enhanced-UI unlock on macOS, and add the Electron/CEF CDP bridge.

@@ -536,6 +536,12 @@ def observe(
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
+    if chosen_layer.startswith("desktop_") and chosen_layer != s.layer and not obs.routing_meta.get("error"):
+        # Persist an explicit native/backend switch for reads and screenshot
+        # fallback, without an extra session write on ordinary observations.
+        from qcu.session import patch
+        patch(layer=chosen_layer)
+
     # A failed/empty observation is evidence about this target. Automatically
     # changing layers could discard its window scope or launch another browser.
     feats = extract_features(obs)

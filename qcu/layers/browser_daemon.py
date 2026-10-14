@@ -71,7 +71,11 @@ def pick_free_port(start: int = DEFAULT_PORT_START, end: int = DEFAULT_PORT_END)
     for port in range(start, end + 1):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                if sys.platform == "win32":
+                    # Windows SO_REUSEADDR can bind an already-owned port.
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                else:
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 s.bind((CDP_HOST, port))
                 return port
         except OSError:
@@ -142,15 +146,8 @@ def is_pid_alive(pid: Optional[int]) -> bool:
     if not pid or pid <= 0:
         return False
     if sys.platform == "win32":
-        # os.kill(pid,0) semantics differ on Windows; probe via tasklist.
-        try:
-            r = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True, text=True, timeout=2,
-            )
-            return str(pid) in (r.stdout or "")
-        except Exception:
-            return False
+        from qcu.common.win32 import is_process_alive
+        return is_process_alive(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -356,6 +353,7 @@ def kill_pid(pid: int, grace_s: float = 2.0) -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
         except Exception:
             pass

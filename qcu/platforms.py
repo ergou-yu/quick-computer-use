@@ -75,7 +75,11 @@ def desktop_capabilities(*, layer: str | None = None,
                               if layer == "desktop_uia" else
                               ["click", "fill", "press_key", "scroll"] if layer == "desktop_ax" else []),
         "result_verification": implemented and layer in {"desktop_ax", "desktop_uia"},
-        "foreground_input_required": False if layer == "desktop_uia" else "action_dependent",
+        "foreground_input_required": "action_dependent",
+        "native_actions": (["screenshot","click","double_click","right_click","hover","type","press_key","scroll","drag"]
+                           if layer == "desktop_uia" else []),
+        "native_input_transports": ["window_message","send_input"] if layer == "desktop_uia" else [],
+        "target_window_capture": layer in {"desktop_ax","desktop_uia"},
         "available": False, "reason": reason,
-        "verification_status": "Windows real device unverified" if layer == "desktop_uia" else None,
+        "verification_status": "Windows 10 native fixture verified (2026-10-14)" if layer == "desktop_uia" else None,
     }

@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import pytest
+
 from qcu.common.types import Action, Observation, Element
 from qcu.router.classifier import classify
 from qcu.router.features import extract
+
+
+@pytest.fixture(autouse=True)
+def macos_feature_fixture(monkeypatch):
+    # These desktop fixtures model TextEdit/AX, independent of the test host.
+    from qcu.router import features
+    monkeypatch.setattr(features, "platform_name", lambda: "darwin")
+    monkeypatch.setattr(features, "desktop_backend_name", lambda: "desktop_ax")
 
 
 # ---------------------------------------------------------------------------

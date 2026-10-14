@@ -73,11 +73,24 @@ class ScreenshotFallbackLayer(Layer):
             scope = getattr(backend, "_target_scope", None) or getattr(backend, "current_target", None)
             if not isinstance(scope, dict) or not scope.get("pid") or not scope.get("window_id"):
                 raise _TargetError("target_unbound", f"{name} has no bound process and window; observe a specific target first")
+            if name == "desktop_uia":
+                try:
+                    backend._validate_capture_options(options or {})
+                except Exception as exc:
+                    raise _TargetError(getattr(exc,"reason","target_unavailable"),str(exc)) from exc
             for key, value in (options or {}).items():
+                if name == "desktop_uia" and key in {"window","app"}:
+                    continue
                 field = {"app": "app", "pid": "pid", "window": "window_title", "window_id": "window_id"}.get(key)
                 if field and value is not None and str(scope.get(field)) != str(value):
                     raise _TargetError("target_mismatch", f"{key} differs from the bound target; observe the requested target first")
             target.update(backend=backend, layer=name, identity=dict(scope))
+            geometry_reader = getattr(backend, "_capture_geometry", None)
+            if callable(geometry_reader):
+                try:
+                    target["geometry"] = geometry_reader()
+                except Exception as exc:
+                    raise _TargetError(getattr(exc, "reason", "target_unavailable"), str(exc)) from exc
             window = getattr(backend, "_target_window", None)
             inspect_window = getattr(backend, "_window_identity", None)
             if window is not None and callable(inspect_window):
@@ -144,12 +157,17 @@ class ScreenshotFallbackLayer(Layer):
             return None
 
     def act(self, action: Action) -> LayerResult:
-        if action.type not in {"click", "double_click", "right_click", "hover", "screenshot"}:
+        if action.type not in {"click", "double_click", "right_click", "hover", "screenshot", "type", "press_key", "scroll", "drag"}:
             return self._failure(_TargetError("unsupported", f"screenshot fallback does not implement {action.type!r}"))
         if action.params.get("ref"):
             return self._failure(_TargetError("unsupported_reference", "visual fallback cannot reinterpret a control ref; observe and locate the target again"))
         try:
             target = self._target(action.params)
+            if target["layer"] == "desktop_uia" and action.type in {"type", "press_key", "scroll", "drag"}:
+                self._check_target(target)
+                result = target["backend"].act(action)
+                result.data["fallback_layer"] = self.name
+                return result
             if action.type == "screenshot":
                 path = self._capture(target, path=action.params.get("path"))
                 if path is None:
@@ -199,7 +217,7 @@ class ScreenshotFallbackLayer(Layer):
                 operation = target["backend"]._act_async(routed)
                 run = lambda: target["loop"].run_until_complete(operation)
             else:
-                if not callable(getattr(target["backend"], "_click", None)):
+                if target["layer"] != "desktop_uia" and not callable(getattr(target["backend"], "_click", None)):
                     raise _TargetError("missing_capability", f"{target['layer']} does not support coordinate actions")
                 run = lambda: target["backend"].act(routed)
         except _TargetError as exc:

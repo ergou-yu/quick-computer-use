@@ -72,11 +72,9 @@ def _bridge_dir() -> Path:
 
 
 def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, PermissionError, OSError):
-        return False
+    # os.kill(pid, 0) terminates processes on Windows, including our caller.
+    from qcu.layers.browser_daemon import is_pid_alive
+    return is_pid_alive(pid)
 
 
 def _http(method: str, url: str, *, token: Optional[str] = None,

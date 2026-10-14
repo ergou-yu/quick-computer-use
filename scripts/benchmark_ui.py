@@ -43,13 +43,13 @@ class Fixture(BaseHTTPRequestHandler):
             body = b'ok'
         else:
             body = HTML.encode()
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('Content-Length', str(len(body)))
-        self.end_headers()
         try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
 
     def log_message(self, *args):
@@ -74,7 +74,7 @@ def main():
         def call(*words):
             start = time.perf_counter()
             proc = subprocess.run([sys.executable, '-m', 'qcu', *words], cwd=root,
-                                  env=env, text=True, capture_output=True, timeout=60)
+                                  env=env, text=True, encoding='utf-8', capture_output=True, timeout=60)
             elapsed = (time.perf_counter()-start)*1000
             payload = json.loads(proc.stdout) if proc.stdout.strip() else None
             records.append(dict(argv=words, wall_ms=elapsed, bytes=len(proc.stdout.encode()),
@@ -134,7 +134,7 @@ def main():
                         calls=selected[0]['calls'])
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(json.dumps(dict(mode=args.mode, summary=summary, runs=runs,
-                                                  records=records), ensure_ascii=False, indent=2))
+                                                  records=records), ensure_ascii=False, indent=2), encoding='utf-8')
             print(json.dumps(summary, ensure_ascii=False))
 
 

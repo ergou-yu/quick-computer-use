@@ -22,6 +22,13 @@ from qcu.daemon.server import health_check
 def python_executable() -> str:
     """The Python interpreter that runs the daemon. Same binary as the CLI so
     AX permission (granted per-binary) and installed deps carry over."""
+    if sys.platform == "win32":
+        from pathlib import Path
+        windowless = Path(sys.executable).with_name("pythonw.exe")
+        if windowless.is_file():
+            # The Windows venv console launcher can allocate a new console in
+            # its delegated interpreter even when its own process is detached.
+            return str(windowless)
     return sys.executable
 
 

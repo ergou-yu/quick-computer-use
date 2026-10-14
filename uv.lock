@@ -293,7 +293,7 @@ wheels = [
 
 [[package]]
 name = "qcu"
-version = "1.9"
+version = "1.9.2"
 source = { editable = "." }
 dependencies = [
     { name = "playwright" },

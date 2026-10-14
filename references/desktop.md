@@ -1,4 +1,4 @@
-# Desktop backends — 1.8
+# Desktop backends — 1.9.2
 
 Desktop selects the current platform: macOS AX, Windows UIA, or an explicit
 unimplemented Linux/HarmonyOS backend. It never defaults to macOS on Windows.
@@ -94,7 +94,9 @@ Local `_vision` OCR is a callable helper for visible window text, with the same
 ownership checks and one dispatch. Pixel differences are `ui_changed`, not a
 verified task result. Only explicit text conditions establish OCR outcome.
 OCR fill is unsupported because focus and field-value identity are not proven.
-General icon/template/VLM grounding and Windows capture are not implemented.
+General icon/template/VLM grounding is not implemented. Windows capture uses
+PrintWindow/GDI on the bound HWND, with physical-pixel coordinates and stdlib
+PNG output. A capture never substitutes the whole desktop or another window.
 
 Apple Events is an explicit read-only compatibility observer in this preview.
 Its positional control references and incomplete scope contract do not satisfy
@@ -122,6 +124,9 @@ Guarantees and limits:
   answer `/json/version` with a debugger URL. No host-wide port scan; a
   missing endpoint reports `no_listening_ports`/`no_cdp_endpoint` plus a
   relaunch hint — never a substituted target.
+  Windows queries IPv4/IPv6 PID ownership through `GetExtendedTcpTable`, avoiding
+  netstat startup and localized output. The selected bridge remains bound for
+  later observations and `batch --observe` as well as actions.
 - Page selection refuses to guess: a `--window` title filter must match
   exactly one page; zero/multiple matches list the available titles.
 - The bridge never launches, relaunches, navigates or closes the user's app;
@@ -176,7 +181,7 @@ Guarantees and limits:
   observe listed all DOM controls; fill verified its own value; a click was
   confirmed by its page-text result — all `outcome=verified`.
 
-## Windows UIA minimum — Windows 真机未验证
+## Windows UIA — real fixture verified
 
 Install `.[windows]`, use an interactive desktop, and select a PID/window. UIA
 can resolve a supplied HWND directly; title/PID selection enumerates top-level
@@ -212,10 +217,29 @@ poisoned: new actions are refused, because the pending COM call may complete
 later. Restart and observe again; no automatic replay. Disabled, stale,
 ambiguous, readonly, inaccessible and missing-pattern cases are explicit.
 
-Validation script: `py scripts/verify_windows_uia.py`. It starts a disposable
-native fixture and an isolated QCU_HOME. Save its JSON output. Current macOS
-contract/mock results do **not** establish live Windows provider, privilege,
-threading, secure-desktop, remote-session or DPI behavior.
+Validation script: `python scripts/verify_windows_uia.py --output result.json`.
+It starts a disposable native fixture and isolated QCU_HOME directories, then
+checks direct and separate CLI calls through the persistent daemon. Four
+patterns, Unicode fill, batch counts, stale refs, restart and unknown outcomes
+were verified on Windows 10 build 19045 on 2026-10-14. These fixture results do
+not establish every provider, privilege, secure-desktop, remote-session or DPI
+configuration. `verify_windows_native.py --output native.json --check-send-input`
+checks native capture and target-owned HWND mouse/keyboard messages on a separate
+fixture. It also reports physical SendInput delivery independently.
+
+UIA ref click/fill remains semantic. Coordinates, native action kinds, or an
+explicit `input_mode:"native"` use the native channel. Missing InvokePattern can
+use opt-in `fallback:"native"` before sending, never after an uncertain semantic
+call. Foreground/focus/point ownership and live ref membership are required.
+The default HWND channel supports clicks, double/right click, hover, wheel,
+drag, UTF-16 text and named keys. Standard Edit Ctrl+A selects all with readback;
+other modifier combos need explicit `input_transport:"send_input"`.
+SendInput returned accepted counts without a verified fixture effect on the
+test host; do not infer delivery or repeat through another channel. Normal HWND
+input was verified. Strict-background never enables background keyboard input.
+Windows 10+ per-thread DPI awareness avoids changing the caller's process DPI.
+Window moves invalidate image grounding. Secure desktops and protected/empty
+PrintWindow providers fail explicitly.
 
 Official technical references:
 

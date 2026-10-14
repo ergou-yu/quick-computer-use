@@ -1,9 +1,9 @@
 ---
 name: quick-computer-use
-description: "Operate browser interfaces and native desktop apps with QCU, using target-bound accessibility references before pixels. macOS AX and minimal Windows UIA preview; Windows real device unverified. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
+description: "Operate browser interfaces and Windows/macOS desktop apps with QCU, preferring target-bound accessibility references. Windows UIA, native window screenshots, mouse/keyboard fallback and CDP bridges have live fixture validation. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
 metadata:
   author: QCU contributors
-  version: "1.8"
+  version: "1.9.2"
   requires:
     bins: ["qcu"]
     packages: ["playwright>=1.40"]
@@ -11,12 +11,66 @@ metadata:
 license: MIT
 ---
 
-# Quick Computer Use — 1.8
+# Quick Computer Use — 1.9.2
 
 Use structured controls on the **selected target**. QCU reports target identity,
 reference lifetime, backend capabilities, dispatch and requested-result evidence.
 A successful API call or changing screen does not alone prove task completion.
-Windows UIA is a minimal preview: **Windows 真机未验证**.
+Windows UIA and the CLI/daemon pipeline were verified on a real Windows 10
+interactive desktop (2026-10-14). Each new target still requires a live probe.
+
+## Windows entrypoints and speed
+
+- From source use `scripts\qcu.ps1` (PowerShell) or `scripts\qcu.cmd` (CMD).
+  They prefer the local virtualenv's windowless `pythonw.exe`, preserving JSON
+  pipes while avoiding console focus theft; `QCU_PYTHON` overrides this choice.
+  Installed `qcu` and `python -m qcu` use the same fast resident daemon.
+- PowerShell 5.1 strips quotes from native JSON arguments. Use UTF-8 stdin:
+  `$json | & .\scripts\qcu.ps1 act -` or `batch - --observe --compact`.
+  Copy refs into the JSON from the latest observation. For `python -m qcu act -`
+  directly, set `$OutputEncoding = [Text.UTF8Encoding]::new($false)` first.
+- Keep the daemon warm across observe/act/batch, prefer semantic fill and
+  bounded batches, and use cached `find`/`inspect` for follow-up searches.
+  Windows process and CDP listener probes use Win32 APIs without subprocesses.
+  No fixed action delays or mandatory screenshots are added.
+
+## Windows native fallback
+
+Observe and bind a UIA window first. Screenshots use that HWND's PrintWindow/GDI
+rendering and report physical screen-pixel origin, scale 1, bounds and identity.
+Copy coordinates from that screenshot or current control bounds; re-locate if
+the window moves. A screenshot captures window pixels and does not verify a
+business result. Minimized, inaccessible or empty captures return errors.
+
+Ordinary ref click/fill stays on UIA. Request native input explicitly with
+coordinates, a native action (`type`, `press_key`, `scroll`, `drag`, etc.), or
+`input_mode:"native"` on a live ref. `fallback:"native"` on a ref click permits
+HWND input only when InvokePattern is missing before any semantic dispatch.
+Do not automatically retry an already sent/unknown action through native input.
+
+```json
+{"type":"screenshot","params":{"path":"C:/temp/window.png"}}
+{"type":"click","params":{"x":450,"y":300,"verify":{"kind":"text","equals":"Saved"}}}
+{"type":"press_key","params":{"ref":"<focused-edit-ref>","key":"Ctrl+A"}}
+{"type":"type","params":{"ref":"<focused-edit-ref>","text":"中文 🚀","verify":{"kind":"value","ref":"<focused-edit-ref>","equals":"中文 🚀"}}}
+{"type":"scroll","params":{"x":450,"y":300,"dy":120}}
+{"type":"drag","params":{"from":{"x":450,"y":300},"to":{"x":550,"y":300}}}
+```
+
+Examples use placeholders; coordinates/refs must come from the current target.
+Native input requires the bound window in the foreground, owned focus and
+unobstructed mouse points. It never activates a different window. `type` writes
+to the current focus; prefer UIA `fill` when replacement is available. Wheel
+units are 120 per notch; positive dy scrolls down. Drag endpoints may be live
+`ref_from`/`ref_to`; endpoint refs cannot also specify coordinates.
+
+The default HWND message channel supports pointer actions, UTF-16 text, named
+keys and Ctrl+A selection on standard Edit controls (selection readback). Other
+modifier shortcuts require explicit `input_transport:"send_input"`. Physical
+SendInput delivery was unconfirmed on the validation host even when the API
+accepted events; check a real result. Channels never switch or replay on failure.
+Secure desktops and higher-integrity input remain subject to Windows restrictions.
+Run `scripts/verify_windows_native.py --output result.json --check-send-input`.
 
 ## Bind the intended target
 
@@ -124,9 +178,13 @@ backend availability or absence of controls. Read errors/truncation matter.
   with full semantics. The bridge serves loopback-only and every evaluate
   call requires the per-launch token from the bridge file. A missing bridge
   reports the embed hint — never a substituted target.
-- **UIA:** bounded single-window controls and four semantic patterns. No
-  Windows screenshot, mouse/keyboard, secure desktop or complete parity claim.
-  Run `scripts/verify_windows_uia.py` on real Windows before relying on it.
+- **UIA:** bounded single-window controls and four semantic patterns. Real
+  WinForms tests cover direct and CLI execution, Unicode, batches, stale refs,
+  restart and unknown-outcome stops. Provider behavior remains target-specific.
+  Native window capture and guarded HWND mouse/keyboard fallback are available
+  on Windows 10+. Secure desktops remain unsupported. Physical SendInput and
+  window-message exposure depend on the target/provider; inspect outcome.
+  `scripts/verify_windows_uia.py --output result.json` reproduces the live test.
 - **Apple Events:** explicit read-only legacy observer; its actions and pid/
   window scoping are unsupported. Observe via AX to obtain actionable refs.
 - **Coordinates/OCR:** require live matching window ownership. Missing Quartz

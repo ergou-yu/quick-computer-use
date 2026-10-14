@@ -1,4 +1,4 @@
-"""Windows UI Automation semantic backend (Windows real device unverified).
+"""Windows UI Automation semantic backend (real Windows fixture verified).
 
 All COM objects live on one persistent MTA worker. Public methods return only
 QCU dataclasses/dicts; no UIA handles cross thread or backend lifetimes. Pattern
@@ -23,6 +23,7 @@ from qcu.platforms import desktop_capabilities
 _PATTERN_IDS = {"invoke": 10000, "value": 10002, "selection": 10010, "toggle": 10015}
 _ACTION_PATTERNS = {"click": "invoke", "invoke": "invoke", "fill": "value",
                     "toggle": "toggle", "select": "selection"}
+_NATIVE_ACTIONS = {"double_click", "right_click", "hover", "type", "press_key", "scroll", "drag"}
 
 
 def _matches_process_image(requested: str, process_image: str) -> bool:
@@ -41,7 +42,7 @@ class UIAError(RuntimeError):
 
 
 def _error_reason(exc: Exception) -> str:
-    if isinstance(exc, UIAError):
+    if isinstance(getattr(exc, "reason", None), str):
         return exc.reason
     code = getattr(exc, "hresult", 0)
     if code and (code & 0xFFFFFFFF) == 0x80070005:
@@ -70,6 +71,14 @@ class _WindowsAPI:
         self.auto = auto
         auto.comtypes.CoInitializeEx(0)
         self._client = None
+        self._native_io = None
+
+    @property
+    def native(self):
+        if self._native_io is None:
+            from qcu.layers._windows_native import WindowsNative
+            self._native_io = WindowsNative()
+        return self._native_io
 
     def control_from_handle(self, handle: int):
         control = self.auto.ControlFromHandle(handle)
@@ -453,13 +462,17 @@ class DesktopUIALayer:
         try:
             return self._call(self._act, action)
         except Exception as exc:
-            unknown = _error_reason(exc) == "uia_timeout"
+            unknown = _error_reason(exc) == "uia_timeout" and action.type != "screenshot"
             return LayerResult(False, self.name, str(exc),
                                {"reason": "outcome_unknown" if unknown else _error_reason(exc),
                                 "retry_safe": False}, dispatch_state="unknown" if unknown else "not_sent")
 
     def _act(self, action: Action) -> LayerResult:
         params = action.params
+        if (action.type == "screenshot" or action.type in _NATIVE_ACTIONS
+                or params.get("input_mode") == "native"
+                or action.type == "click" and "ref" not in params):
+            return self._native_action(action)
         kind = _ACTION_PATTERNS.get(action.type)
         if kind is None:
             return LayerResult(False, self.name, f"Unsupported semantic UIA action: {action.type}",
@@ -488,6 +501,9 @@ class DesktopUIALayer:
             raise UIAError("control_disabled", "Disabled controls cannot receive a semantic action")
         pattern = self._api.pattern(control, kind)
         if pattern is None:
+            if action.type == "click" and params.get("fallback") == "native":
+                # Opt-in only, before any semantic send; no transport retry.
+                return self._native_action(action)
             raise UIAError("unsupported", f"Control does not expose UIA {kind} Pattern")
         if kind == "value" and pattern.IsReadOnly:
             raise UIAError("control_readonly", "Value Pattern is read-only")
@@ -547,6 +563,132 @@ class DesktopUIALayer:
                                    {"reason": "outcome_unknown", "cause": _error_reason(exc),
                                     "error": str(exc), "retry_safe": False}, dispatch_state="unknown")
             raise
+
+    def _native_action(self, action):
+        from qcu.common.verification import validate_condition, match_condition
+        from qcu.layers._windows_native import NativeError
+        params = dict(action.params)
+        kind = action.type
+        if kind not in _NATIVE_ACTIONS | {"click", "screenshot"}:
+            raise UIAError("unsupported", f"Native input does not implement {kind}")
+        try:
+            validate_condition(params.get("verify"))
+        except ValueError as exc:
+            raise UIAError("invalid_verification", str(exc)) from None
+        self._validate_window()
+        for key in ("pid", "window_id"):
+            if key in params and str(params[key]) != str(self._target[key]):
+                raise UIAError("target_mismatch", "Native input target differs from observation")
+        if "window" in params and str(params["window"]) not in {str(self._target["window_id"]), hex(self._target["window_id"]), self._window.Name}:
+            raise UIAError("target_mismatch", "Native input window differs from observation")
+        if "app" in params and not _matches_process_image(str(params["app"]), self._target["process_image"]):
+            raise UIAError("target_mismatch", "Native input process image differs from observation")
+        condition = params.get("verify")
+        if condition and condition.get("ref"):
+            self._get_control(condition["ref"])
+        focus_hwnd = None
+
+        def control_for(ref):
+            control = self._get_control(ref)
+            if not control.IsEnabled or control.IsOffscreen:
+                raise UIAError("control_disabled" if not control.IsEnabled else "control_offscreen", "Native target is disabled/offscreen")
+            return control
+
+        if params.get("ref"):
+            control = control_for(params["ref"])
+            if kind in {"type", "press_key"}:
+                focus_hwnd = int(control.NativeWindowHandle)
+                value_pattern = self._api.pattern(control,"value") if kind == "type" else None
+                if value_pattern is not None and value_pattern.IsReadOnly:
+                    raise UIAError("control_readonly","Cannot type into a read-only value control")
+                if not focus_hwnd and not control.HasKeyboardFocus:
+                    raise UIAError("focus_mismatch", "Requested ref is not the focused control")
+            else:
+                if "x" in params or "y" in params:
+                    raise UIAError("ref_coordinate_conflict", "Use a live ref or explicit coordinates, not both")
+                rect = control.BoundingRectangle
+                params.update(x=(rect.left+rect.right)/2, y=(rect.top+rect.bottom)/2)
+        if kind == "drag":
+            for ref_key, xkey, ykey in (("ref_from", "x", "y"), ("ref_to", "x2", "y2")):
+                if params.get(ref_key):
+                    if xkey in params or ykey in params or (ref_key=="ref_from" and any(k in params for k in ("x1","y1","from"))) or (ref_key=="ref_to" and "to" in params):
+                        raise UIAError("ref_coordinate_conflict","Drag endpoint cannot mix a ref with coordinates")
+                    rect = control_for(params[ref_key]).BoundingRectangle
+                    params[xkey], params[ykey] = (rect.left+rect.right)/2, (rect.top+rect.bottom)/2
+            if "from" in params and "to" in params:
+                params.update(x=params["from"]["x"], y=params["from"]["y"], x2=params["to"]["x"], y2=params["to"]["y"])
+            if "x1" in params:
+                params["x"], params["y"] = params["x1"], params["y1"]
+        try:
+            native = self._api.native
+            if kind == "screenshot":
+                from qcu.session import _qcu_home
+                from pathlib import Path
+                import uuid
+                path = params.get("path") or str(_qcu_home()/"artifacts"/("window-"+uuid.uuid4().hex+".png"))
+                if not isinstance(path, str) or not path:
+                    raise UIAError("invalid_path", "screenshot path must be a non-empty string")
+                data = native.capture(self.current_target, path)
+                self._validate_window()
+                data["target"] = self.current_target
+                return LayerResult(True, self.name, "Bound window screenshot captured", data,
+                                   dispatch_state="not_sent", outcome="verified")
+            data = native.dispatch(self.current_target, kind, params, focus_hwnd=focus_hwnd)
+        except NativeError as exc:
+            if exc.reason == "control_disabled":
+                exc.data["uia_window_enabled"] = bool(self._window.IsEnabled)
+            return LayerResult(False, self.name, str(exc), {"reason": exc.reason, "retry_safe": False, **exc.data},
+                               dispatch_state="unknown" if exc.dispatched else "not_sent")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise UIAError("invalid_action", str(exc)) from None
+        data.update(target=self.current_target, retry_safe=False, input_mode="native")
+        if condition is None:
+            if (data.get("native_verification") or {}).get("verified"):
+                data["verification"] = data["native_verification"]
+                return LayerResult(True,self.name,"Native text selection verified",data,dispatch_state="sent",outcome="verified")
+            data["reason"] = "verification_not_requested"
+            return LayerResult(True, self.name, "Native input sent; result unverified", data, dispatch_state="sent")
+        deadline = time.monotonic() + min(condition.get("timeout_ms", 1000), 5000)/1000
+        try:
+            while True:
+                root = self._validate_window()
+                if condition.get("ref"):
+                    ref = condition["ref"]
+                    elements = [self._element(self._get_control(ref), ref, None, 0)]
+                else:
+                    elements, _, _ = self._walk(root, 8, 500, fresh=False)
+                evidence = match_condition(condition, elements)
+                if evidence["verified"]:
+                    data["verification"] = evidence
+                    return LayerResult(True, self.name, "Native input result verified", data, dispatch_state="sent", outcome="verified")
+                if time.monotonic() >= deadline:
+                    data.update(reason="outcome_unknown", verification=evidence)
+                    return LayerResult(False, self.name, "Input sent; result not confirmed", data, dispatch_state="sent")
+                time.sleep(.02)
+        except Exception as exc:
+            data.update(reason="outcome_unknown", error=str(exc))
+            return LayerResult(False, self.name, "Input sent; verification unavailable", data, dispatch_state="sent")
+
+    def _screenshot(self, path):
+        return self.act(Action("screenshot", {"path": path}))
+
+    def _capture_geometry(self):
+        def read():
+            self._validate_window()
+            return self._api.native.geometry(self.current_target)
+        return self._call(read)
+
+    def _validate_capture_options(self,options):
+        def check():
+            self._validate_window()
+            for key in ("pid","window_id"):
+                if options.get(key) is not None and str(options[key])!=str(self._target[key]):
+                    raise UIAError("target_mismatch","Capture target differs from observation")
+            if options.get("app") is not None and not _matches_process_image(str(options["app"]),self._target["process_image"]):
+                raise UIAError("target_mismatch","Capture application differs from observation")
+            if options.get("window") is not None and str(options["window"]) not in {str(self._target["window_id"]),hex(self._target["window_id"]),self._window.Name}:
+                raise UIAError("target_mismatch","Capture window differs from observation")
+        return self._call(check)
 
     def close(self) -> None:
         if self._closed:

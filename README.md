@@ -1,9 +1,11 @@
 # QCU — Quick Computer Use
 
-**1.8.** QCU controls an explicitly selected browser page or
+**1.9.2.** QCU controls an explicitly selected browser page or
 desktop window with accessibility references. This revision binds references to
 a backend lifetime, target and observation; separates dispatch from verified
-results; and adds a minimal Windows UI Automation backend. **Windows 真机未验证.**
+results; and supports Windows UI Automation. Real Windows 10 native and CLI
+fixtures are verified; persistent DOM/CDP, compact observations, cached queries
+and bounded batches retain their fast paths.
 
 ## Install
 
@@ -18,8 +20,10 @@ python -m pip install -e '.[macos,dev]'  # macOS AX
 On Windows PowerShell:
 
 ```powershell
-py -m pip install -e ".[windows,dev]"
-py scripts/verify_windows_uia.py
+py -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install -e ".[windows,dev]"
+& .\scripts\qcu.ps1 --version
+& .\.venv\Scripts\python.exe scripts\verify_windows_uia.py --output uia-result.json
 ```
 
 Platform extras use environment markers. Web/macOS installations do not import
@@ -56,15 +60,26 @@ Preserve the selected target. Tests must use an independent `QCU_HOME`.
 | Platform | Backend | Scope |
 |---|---|---|
 | macOS | `desktop_ax` | AX controls/actions, bounded window capture and safety checks |
-| Windows | `desktop_uia` | Minimal Invoke/Value/Toggle/SelectionItem; mock contracts and a live validation script; **real Windows unverified** |
+| Windows | `desktop_uia` | Semantic patterns; native HWND PNG screenshots and guarded mouse/keyboard message fallback; real WinForms verification |
 | Linux | `desktop_linux` | Explicitly not implemented; registration extension point |
 | HarmonyOS | `desktop_harmony` | Explicitly not implemented; registration extension point |
 
 Apple Events is an explicit **read-only legacy observer** in this preview; its
 positional action references cannot meet the new control guarantees. Start AX
 observation to obtain actionable refs. General icon/template/VLM grounding,
-Windows screenshots/keyboard input and Linux/HarmonyOS desktop control are not
-implemented. No paid visual service is required.
+Linux/HarmonyOS desktop control is not implemented. Windows native capture/input
+uses no extra package or paid visual service. Physical SendInput is an explicit
+option with target-specific delivery; the verified default fallback uses HWND
+messages. Secure desktops and full provider parity are not claimed.
+
+Windows PowerShell/CMD entrypoints are in `scripts/`. PowerShell 5.1 should pipe
+JSON into `scripts\qcu.ps1 act -` / `batch -`; the shim preserves UTF-8 and quotes.
+Windows process/port probes call Win32 directly without tasklist/netstat startup.
+An explicitly bound CDP bridge survives later actions and `batch --observe`.
+Windows UIA ref actions stay semantic by default. Native screenshot/coordinates
+borrow the bound window; `input_mode:"native"` requests input on a live ref.
+`scripts/verify_windows_native.py --output native.json --check-send-input`
+reproduces screenshot, pointer, keyboard, Unicode and ownership checks.
 
 ## Verification and migration
 
@@ -86,6 +101,9 @@ Events actions to AX. `strict_ref` remains accepted; safe ref behavior is now
 the default for all web ref actions.
 
 ## Tests
+
+See [TEST-REPORT.md](TEST-REPORT.md) for the 1.9.2 Windows results,
+reproduction commands and the unconfirmed physical SendInput diagnostic.
 
 ```bash
 QCU_HOME="$(mktemp -d)" python -m pytest -q

@@ -303,11 +303,11 @@ def test_invalid_verification_is_rejected_before_dispatch(setup_uia):
 def test_timeout_blocks_new_dispatch(setup_uia):
     refs = observed(setup_uia)
     layer = setup_uia[0]
-    layer._call_timeout = .01
+    layer._call_timeout = .15
     pattern = setup_uia[2]["button"].patterns["invoke"]
     original = pattern.Invoke
     def slow():
-        time.sleep(.05)
+        time.sleep(.3)
         return original()
     pattern.Invoke = slow
     result = layer.act(Action("click", {"ref": refs["Button"]}))

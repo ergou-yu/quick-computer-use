@@ -1191,8 +1191,8 @@ class DesktopAXLayer(Layer):
     @staticmethod
     def _matches_app(app: str, running: Any) -> bool:
         """Match an absolute bundle path exactly; names must not pick a clone."""
-        from pathlib import Path
-        if Path(app).is_absolute():
+        from pathlib import Path, PurePosixPath
+        if PurePosixPath(app).is_absolute():
             try:
                 bundle = running.bundleURL()
                 return bundle is not None and Path(str(bundle.path())).resolve() == Path(app).resolve()

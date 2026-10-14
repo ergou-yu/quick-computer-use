@@ -1,4 +1,4 @@
-# Routing and target binding — 1.8
+# Routing and target binding — 1.9.2
 
 The router remains a small priority rule chain. `qcu/router/rules.py` and
 `qcu/platforms.py` are the source of truth; decisions are recorded in telemetry.
