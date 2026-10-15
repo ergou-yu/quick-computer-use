@@ -21,7 +21,8 @@ const Clutter = {KEY_Control_L: 65507, KEY_a: 97, KEY_F6: 65475,
     ModifierType: {SHIFT_MASK: 1, CONTROL_MASK: 4, MOD1_MASK: 8, MOD4_MASK: 64, SUPER_MASK: 67108864,
         BUTTON1_MASK: 256, BUTTON2_MASK: 512, BUTTON3_MASK: 1024, BUTTON4_MASK: 2048, BUTTON5_MASK: 4096},
     ScrollDirection: {UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4}, ScrollSource: {WHEEL: 1},
-    get_default_backend: () => ({get_default_seat: () => ({create_virtual_device: k => k === 1 ? keyboard : mouse,
+    get_default_backend: () => ({get_pointer_sprite: () => ({get_coords: () => ({x: 41, y: 73})}),
+        get_default_seat: () => ({create_virtual_device: k => k === 1 ? keyboard : mouse,
         warp_pointer: (x, y) => { events.push(['warp', x, y]); pointer = [x, y, 0]; }})}),
 };
 const globalMock = {get_pointer: () => pointer};
@@ -110,6 +111,10 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     const hover = await input(b, 'hover', {x: 20, y: 30});
     assert.deepEqual(events, [['move', 20, 30]]);
     assert.equal(hover.pointer_motion, 'virtual_absolute');
+    checks++;
+    const position = Bridge.prototype._pointerPosition.call({});
+    assert.equal(position[0], 41);
+    assert.equal(position[1], 73);
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
