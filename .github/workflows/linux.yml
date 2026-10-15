@@ -31,12 +31,44 @@ jobs:
             trap "kill $wm 2>/dev/null || true" EXIT
             .venv/bin/python scripts/verify_linux_atspi.py --output linux-evidence/linux-live.json
           '
+      - name: Diagnose browser startup
+        if: always()
+        run: |
+          .venv/bin/python - <<'PY'
+          import subprocess, tempfile
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              executable=p.chromium.executable_path
+          with tempfile.TemporaryDirectory(prefix='qcu-chromium-probe-') as directory:
+              result=subprocess.run([executable,'--headless=new','--user-data-dir='+directory,'--dump-dom','about:blank'],capture_output=True,text=True,timeout=15)
+              print('Chromium probe exit:',result.returncode)
+              print(result.stderr[-10000:])
+          PY
       - name: Run regression suite
         run: |
           set -o pipefail
           .venv/bin/python -m pytest -q --timeout=60 --durations=15 | tee linux-evidence/pytest.txt
       - name: Build packages
         run: .venv/bin/python -m build
+      - name: Print fixture diagnostics
+        if: failure()
+        run: |
+          .venv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('linux-evidence/linux-live.json')
+          if path.exists():
+              report=json.loads(path.read_text())
+              print('Fixture error:',report.get('error'))
+              for record in report.get('records',[]):
+                  result=record.get('result',{})
+                  print(record.get('command'), result.get('data',{}))
+                  if 'elements' in result:
+                      print('Tree:',[(e.get('role'),e.get('name'),e.get('value')) for e in result['elements']])
+                      print('Read errors:',result.get('routing_meta',{}).get('read_errors'))
+          for path in Path('linux-evidence').glob('*.fixture.log'):
+              print(path.read_text()[-5000:])
+          PY
       - name: Save test evidence
         if: always()
         uses: actions/upload-artifact@v4
