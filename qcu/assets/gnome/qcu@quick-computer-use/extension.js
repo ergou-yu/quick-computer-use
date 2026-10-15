@@ -21,6 +21,25 @@ function tick() {
         return GLib.SOURCE_REMOVE;
     }));
 }
+function nextFrame() {
+    if (!global.stage?.schedule_update || !global.stage?.connect)
+        return tick();
+    return new Promise((resolve, reject) => {
+        let signal, timeout;
+        const finish = error => {
+            if (signal) global.stage.disconnect(signal);
+            if (timeout) GLib.source_remove(timeout);
+            error ? reject(error) : resolve();
+        };
+        signal = global.stage.connect('after-update', () => finish());
+        timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            timeout = 0;
+            finish(Object.assign(new Error('Compositor frame did not complete'), {reason: 'input_timeout'}));
+            return GLib.SOURCE_REMOVE;
+        });
+        global.stage.schedule_update();
+    });
+}
 
 export default class QCUBridge extends Extension {
     enable() {
@@ -263,16 +282,13 @@ export default class QCUBridge extends Extension {
         if (mask & busy)
             fail('input_busy', 'A pointer button or modifier is already held');
         const seat = global.backend?.get_default_seat?.() ?? Clutter.get_default_backend().get_default_seat();
-        // Select once BEFORE dispatch. GNOME 50 uses the compositor's integer
-        // seat warp API; there is no retry or alternate send after a failure.
-        const warp = Number.parseInt(Config.PACKAGE_VERSION) === 50;
-        if (warp && typeof seat.warp_pointer !== 'function')
-            fail('unsupported', 'The compositor does not expose seat pointer motion');
+        // Select once before dispatch; never retry an absolute/relative send.
+        const relative = Number.parseInt(Config.PACKAGE_VERSION) === 50;
         if (keys.length)
             this._keyboard ??= seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         else
             this._pointer ??= seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-        let sent = false, events = 0, heldKeys = [], heldButtons = [], lastPoint = null;
+        let sent = false, events = 0, heldKeys = [], heldButtons = [];
         const send = async fn => {
             if (!this._enabled)
                 fail('target_changed', 'Bridge disabled');
@@ -300,31 +316,20 @@ export default class QCUBridge extends Extension {
             for (let i = 0; i < points.length; i++) {
                 const [x, y] = points[i];
                 this._point(w, g, x, y);
-                let signal = 0, timeout = 0, complete;
-                const ack = new Promise(resolve => { complete = resolve; });
-                try {
-                    // Observe the event reaching the compositor scene, rather
-                    // than a sampled cursor position from a separate query.
-                    signal = global.stage.connect('captured-event', (_stage, event) => {
-                        if (event.type() === Clutter.EventType.MOTION) {
-                            const [ex, ey] = event.get_coords();
-                            if (Math.abs(ex-x) <= 1 && Math.abs(ey-y) <= 1)
-                                complete({x: ex, y: ey});
-                        }
-                        return Clutter.EVENT_PROPAGATE;
-                    });
-                    timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-                        timeout = 0;
-                        complete(null);
-                        return GLib.SOURCE_REMOVE;
-                    });
-                    await send(t => warp ? seat.warp_pointer(x, y) : this._pointer.notify_absolute_motion(t, x, y));
-                    lastPoint = await ack;
-                    if (!lastPoint)
-                        fail('pointer_mismatch', `No compositor motion event at (${x},${y}); cursor query=${global.get_pointer().slice(0,2)}`);
-                } finally {
-                    if (signal) global.stage.disconnect(signal);
-                    if (timeout) GLib.source_remove(timeout);
+                await send(t => {
+                    if (relative) {
+                        const [px, py] = global.get_pointer();
+                        this._pointer.notify_relative_motion(t, x-px, y-py);
+                    } else {
+                        this._pointer.notify_absolute_motion(t, x, y);
+                    }
+                });
+                // Delivery can be asynchronous; wait only on the observed pointer.
+                const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
+                while (Math.abs(global.get_pointer()[0]-x) > 1 || Math.abs(global.get_pointer()[1]-y) > 1) {
+                    if (GLib.get_monotonic_time() > pointerDeadline)
+                        fail('pointer_mismatch', `Mutter pointer did not reach (${x},${y}); actual=${global.get_pointer().slice(0,2)}`);
+                    await nextFrame();
                 }
                 this._point(w, g, x, y);
                 if (kind === 'drag' && i === 0) {
@@ -349,8 +354,8 @@ export default class QCUBridge extends Extension {
             }
             for (const direction of scroll)
                 await send(t => this._pointer.notify_discrete_scroll(t, direction, Clutter.ScrollSource.WHEEL));
-            return {events, pointer_position: lastPoint, pointer_readback: 'clutter_motion_event',
-                pointer_motion: warp ? 'seat_warp' : 'virtual_absolute'};
+            const [x, y] = global.get_pointer();
+            return {events, pointer_position: {x, y}, pointer_motion: relative ? 'virtual_relative' : 'virtual_absolute'};
         } catch (e) {
             e.dispatched = sent;
             throw e;

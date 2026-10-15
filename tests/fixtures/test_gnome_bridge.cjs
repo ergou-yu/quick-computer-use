@@ -8,37 +8,26 @@ let source = fs.readFileSync(path.join(__dirname, '../../qcu/assets/gnome/qcu@qu
 source = source.replace(/^import .*;\r?\n/gm, '').replace('export default class QCUBridge', 'class QCUBridge');
 const events = [];
 let pointer = [30, 30, 0], clock = 1, onKey = () => {};
-let listenerId = 0, timerId = 0;
-const listeners = new Map(), timers = new Map();
-const stage = {get_key_focus: () => stage,
-    connect: (signal, fn) => { listeners.set(++listenerId, fn); return listenerId; },
-    disconnect: id => listeners.delete(id)};
-function motion(x, y) {
-    for (const fn of listeners.values())
-        fn(stage, {type: () => 1, get_coords: () => [x, y]});
-}
 const keyboard = {notify_keyval(t, key, state) { events.push(['key', key, state]); onKey(key, state); }};
 const mouse = {
-    notify_absolute_motion(t, x, y) { events.push(['move', x, y]); pointer = [x, y, 0]; motion(x, y); },
+    notify_absolute_motion(t, x, y) { events.push(['move', x, y]); pointer = [x, y, 0]; },
+    notify_relative_motion(t, x, y) { events.push(['relative', x, y]); pointer = [pointer[0]+x, pointer[1]+y, 0]; },
     notify_button(t, button, state) { events.push(['button', button, state]); },
     notify_discrete_scroll(t, direction) { events.push(['scroll', direction]); },
 };
 const Clutter = {KEY_Control_L: 65507, KEY_a: 97, KEY_F6: 65475,
-    EventType: {MOTION: 1}, EVENT_PROPAGATE: 0,
     KeyState: {PRESSED: 1, RELEASED: 0}, ButtonState: {PRESSED: 1, RELEASED: 0},
     InputDeviceType: {KEYBOARD_DEVICE: 1, POINTER_DEVICE: 2}, PickMode: {ALL: 1},
     ModifierType: {SHIFT_MASK: 1, CONTROL_MASK: 4, MOD1_MASK: 8, MOD4_MASK: 64, SUPER_MASK: 67108864,
         BUTTON1_MASK: 256, BUTTON2_MASK: 512, BUTTON3_MASK: 1024, BUTTON4_MASK: 2048, BUTTON5_MASK: 4096},
     ScrollDirection: {UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4}, ScrollSource: {WHEEL: 1},
     get_default_backend: () => ({get_default_seat: () => ({create_virtual_device: k => k === 1 ? keyboard : mouse,
-        warp_pointer: (x, y) => { events.push(['warp', x, y]); pointer = [0, y, 0]; motion(x, y); }})}),
+        warp_pointer: (x, y) => { events.push(['warp', x, y]); pointer = [x, y, 0]; }})}),
 };
-const globalMock = {get_pointer: () => pointer, stage};
+const globalMock = {get_pointer: () => pointer};
 const main = {sessionMode: {isLocked: false}, overview: {visible: false}, modalCount: 0};
 const context = {Clutter, Gio: {}, GLib: {get_monotonic_time: () => clock++, SOURCE_REMOVE: false,
-    idle_add(p, fn) { queueMicrotask(fn); },
-    timeout_add(p, ms, fn) { const id = ++timerId; timers.set(id, setTimeout(fn, ms)); return id; },
-    source_remove(id) { clearTimeout(timers.get(id)); timers.delete(id); }}, Meta: {}, Shell: {}, Main: main,
+    idle_add(p, fn) { queueMicrotask(fn); }}, Meta: {}, Shell: {}, Main: main,
     Extension: class {}, global: globalMock, console, TextDecoder, Bridge: null,
     Config: {PACKAGE_VERSION: '50'}};
 vm.runInNewContext(source + '\nBridge = QCUBridge;', context);
@@ -99,6 +88,8 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     await assert.rejects(input(b, 'press_key', {key: 'F6'}), e => e.dispatched === true);
     assert.deepEqual(events, [['key', 65475, 1], ['key', 65475, 0]]);
     checks++;
+    const stage = {get_key_focus: () => stage};
+    globalMock.stage = stage;
     globalMock.display = {focus_window: w};
     Bridge.prototype._foreground.call({}, w); // Clutter returns the stage for default focus
     stage.get_key_focus = () => ({shellMenu: true});
@@ -116,12 +107,8 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     checks++;
     b = bridge();
     const hover = await input(b, 'hover', {x: 20, y: 30});
-    assert.deepEqual(events, [['warp', 20, 30]]);
-    assert.equal(hover.pointer_motion, 'seat_warp');
-    assert.equal(hover.pointer_position.x, 20); // event readback, not the deliberately stale query
-    assert.equal(hover.pointer_position.y, 30);
-    assert.equal(listeners.size, 0);
-    assert.equal(timers.size, 0);
+    assert.deepEqual(events, [['relative', -10, 0]]);
+    assert.equal(hover.pointer_motion, 'virtual_relative');
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

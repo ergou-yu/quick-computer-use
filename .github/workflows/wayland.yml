@@ -63,7 +63,11 @@ jobs:
           path: wayland-evidence/
   gnome-modern:
     runs-on: ubuntu-24.04
-    container: ubuntu:26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['24.04', '26.04']
+    container: ubuntu:${{ matrix.ubuntu }}
     timeout-minutes: 20
     env:
       DEBIAN_FRONTEND: noninteractive
@@ -109,5 +113,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wayland-modern-test-evidence
+          name: wayland-container-${{ matrix.ubuntu }}-test-evidence
           path: wayland-evidence/
