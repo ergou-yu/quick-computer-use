@@ -29,7 +29,7 @@ jobs:
       - name: Check the source entrypoint outside the repository
         run: |
           cd /tmp
-          test "$("$GITHUB_WORKSPACE/scripts/qcu" --version)" = 'qcu 1.10.0'
+          test "$("$GITHUB_WORKSPACE/scripts/qcu" --version)" = 'qcu 1.11.0'
       - name: Run real GTK, AT-SPI, X11 fixture
         run: |
           mkdir -p linux-evidence

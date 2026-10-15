@@ -1,0 +1,8 @@
+{
+  "uuid": "qcu@quick-computer-use",
+  "name": "QCU Native Wayland Bridge",
+  "description": "Explicitly enabled, target-bound native capture and input for QCU on GNOME Wayland.",
+  "shell-version": ["46"],
+  "version": 1,
+  "url": "https://github.com/ergou-yu/quick-computer-use"
+}

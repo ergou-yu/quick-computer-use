@@ -1,4 +1,4 @@
-"""Real GTK/AT-SPI/X11 CLI validation in an existing Linux desktop session.
+"""Real GTK/AT-SPI/X11 or GNOME Wayland validation in a disposable session.
 
 Creates only owned disposable windows and QCU_HOME. Does not install services,
 change compositor settings, alter keymaps/clipboards or touch user apps.
@@ -23,8 +23,13 @@ def verify(output):
     output=Path(output).absolute()
     output.parent.mkdir(parents=True,exist_ok=True)
     report=dict(platform=sys.platform,python=sys.version,qcu_version=importlib.metadata.version("qcu"),
-                environment={k:os.environ.get(k) for k in ("XDG_SESSION_TYPE","DISPLAY")},
+                environment={k:os.environ.get(k) for k in ("XDG_SESSION_TYPE","DISPLAY","WAYLAND_DISPLAY","GDK_BACKEND")},
                 ok=False,records=[])
+    wayland=os.environ.get("XDG_SESSION_TYPE")=="wayland"
+    if wayland:
+        from gi.repository import Gio,GLib
+        control=Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SESSION,Gio.DBusProxyFlags.DO_NOT_AUTO_START,
+            None,"org.gnome.Shell","/org/gnome/Shell/Extensions/QCUTest","org.qcu.Test1",None)
     with tempfile.TemporaryDirectory(prefix="qcu-linux-live-") as tmp:
         state=Path(tmp)
         env=dict(os.environ,QCU_HOME=str(state/"qcu"),PYTHONUTF8="1",NO_AT_BRIDGE="0",GTK_MODULES="gail:atk-bridge")
@@ -58,6 +63,8 @@ def verify(output):
             while commands.exists():
                 assert time.monotonic()<deadline,"fixture command timed out"
                 time.sleep(.03)
+            if wayland:
+                control.call_sync("Request",GLib.Variant("(s)",(json.dumps(dict(op=op,title=title,pid=fixture.pid,**data)),)),0,3000,None)
             # Setup-only settling for the owned WM fixture, never QCU action delays.
             time.sleep(.15)
         def evidence(text): return dict(kind="text",equals=text,timeout_ms=2000)
@@ -72,6 +79,7 @@ def verify(output):
                 time.sleep(.15)
             report["records"].append(dict(command=["observe","--pid",str(fixture.pid)],result=obs))
             r=refs(obs)
+            command("focus")
             assert act("fill",dict(ref=r["Name"],text="Linux 中文 🚀"))["outcome"]=="verified"
             assert act("toggle",dict(ref=r["Check"],verify=dict(kind="checked",ref=r["Check"],equals=True)))["outcome"]=="verified"
             assert act("select",dict(ref=r["Item"],verify=dict(kind="selected",ref=r["Item"],equals=True)))["outcome"]=="verified"
@@ -97,11 +105,16 @@ def verify(output):
             act("press_key",dict(ref=r["Name"],key="End"))
             assert act("type",dict(ref=r["Name"],text=" 追加🚀",verify=dict(kind="value",ref=r["Name"],equals="Batch 中文 追加🚀")))["outcome"]=="verified"
             panel=next(e for e in obs["elements"] if e["name"]=="Pointer panel")
-            b=panel["bounds"]
-            x,y=b["x"]+b["width"]//2,b["y"]+b["height"]//2
+            if wayland:
+                hover=act("hover",dict(ref=panel["ref"],verify=evidence("Hover")))
+                x,y=hover["data"]["pointer_position"].values()
+            else:
+                b=panel["bounds"]
+                x,y=b["x"]+b["width"]//2,b["y"]+b["height"]//2
             for kind,text,extra in (("hover","Hover",{}),("right_click","Right",{}),
                                     ("double_click","Double",{}),("scroll","Wheel",dict(dy=120)),
                                     ("drag","Dragged",dict(x2=x+40,y2=y+10))):
+                if wayland and kind=="hover": continue
                 result=act(kind,dict(x=x,y=y,verify=evidence(text),**extra))
                 assert result["outcome"]=="verified",result
             fallback=call("observe","--layer","screenshot_fallback","--compact")
