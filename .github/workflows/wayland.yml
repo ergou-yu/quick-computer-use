@@ -25,31 +25,7 @@ jobs:
       - name: Run GTK and native bridge in a real GNOME Wayland compositor
         run: |
           mkdir -p wayland-evidence
-          dbus-run-session -- bash -c '
-            set -eu
-            export XDG_RUNTIME_DIR=$(mktemp -d) XDG_DATA_HOME=$(mktemp -d) XDG_CONFIG_HOME=$(mktemp -d)
-            export XDG_CACHE_HOME=$(mktemp -d) XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME
-            export GSETTINGS_BACKEND=memory LIBGL_ALWAYS_SOFTWARE=1 NO_AT_BRIDGE=0 GTK_MODULES=gail:atk-bridge
-            unset DISPLAY
-            .venv/bin/python -m qcu.gnome_bridge install
-            mkdir -p "$XDG_DATA_HOME/gnome-shell/extensions/qcu-test@quick-computer-use"
-            cp tests/fixtures/gnome-control/* "$XDG_DATA_HOME/gnome-shell/extensions/qcu-test@quick-computer-use/"
-            # Memory settings are per-process; use a keyfile backend for this owned session.
-            export GSETTINGS_BACKEND=keyfile
-            gsettings set org.gnome.shell enabled-extensions "[\"qcu@quick-computer-use\",\"qcu-test@quick-computer-use\"]"
-            gsettings set org.gnome.desktop.interface enable-animations false
-            gsettings set org.gnome.shell welcome-dialog-last-shown-version "46.0"
-            gnome-shell --headless --wayland --virtual-monitor 1280x1024 --no-x11 >wayland-evidence/gnome.log 2>&1 &
-            shell=$!
-            trap "kill $shell 2>/dev/null || true" EXIT
-            for n in $(seq 1 80); do
-              if test -S "$XDG_RUNTIME_DIR/wayland-0"; then break; fi
-              kill -0 $shell
-              sleep .25
-            done
-            export WAYLAND_DISPLAY=wayland-0 GDK_BACKEND=wayland
-            .venv/bin/python scripts/verify_linux_atspi.py --output wayland-evidence/linux-live.json
-          '
+          dbus-run-session -- bash scripts/verify_gnome_session.sh
       - name: Print compositor and fixture diagnostics
         if: always()
         run: |
@@ -84,4 +60,49 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wayland-test-evidence
+          path: wayland-evidence/
+  gnome-modern:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install current Ubuntu LTS GNOME
+        run: |
+          apt-get update
+          apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[linux,dev]'
+          useradd --create-home --shell /bin/bash qcu-ci
+          chown -R qcu-ci:qcu-ci "$GITHUB_WORKSPACE"
+      - name: Run current LTS Wayland fixture as a desktop user
+        run: runuser -u qcu-ci -- dbus-run-session -- bash scripts/verify_gnome_session.sh
+      - name: Print compositor diagnostics and mirror owned evidence
+        if: always()
+        run: |
+          tail -100 wayland-evidence/gnome.log || true
+          .venv/bin/python - <<'PY'
+          import base64,json
+          from pathlib import Path
+          p=Path('wayland-evidence/linux-live.json')
+          if p.exists():
+              r=json.loads(p.read_text())
+              print('Fixture error:',r.get('error'))
+              for x in r.get('records',[]):
+                  result=x.get('result',{})
+                  print(x.get('command'),result.get('message'),result.get('data',{}))
+          for name in ('linux-live.json','linux-before.png','linux-moved.png'):
+              p=Path('wayland-evidence')/name
+              if p.exists():
+                  b=p.read_bytes()
+                  for i,start in enumerate(range(0,len(b),9000)):
+                      print('QCU_EVIDENCE',name,i,base64.b64encode(b[start:start+9000]).decode())
+          PY
+      - name: Save current LTS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayland-modern-test-evidence
           path: wayland-evidence/

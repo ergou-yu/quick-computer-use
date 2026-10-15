@@ -119,7 +119,8 @@ The connection and virtual input devices are reused. No per-event subprocesses,
 OCR, clipboard edits, mandatory screenshots or fixed action delays are added.
 
 Screenshot uses `Shell.Screenshot` on the focused bound window into memory,
-then writes the returned PNG in the QCU process. It returns `bounds`,
+then writes the returned PNG in the QCU process. It returns buffer `bounds`
+(including client-side transparent shadows), the visible `frame_bounds`,
 `coordinate_origin`, `coordinate_scale`, `pixel_size`, `wayland_window_id` and
 `coordinate_space:"wayland_logical"`. Convert an image pixel `(u,v)` to pointer
 coordinates as `(origin.x+u/scale, origin.y+v/scale)`. Never reuse an origin after

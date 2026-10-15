@@ -124,7 +124,7 @@ export default class QCUBridge extends Extension {
             fail('foreground_mismatch', 'Lock screen, overview or Shell modal is active');
         const keyFocus = global.stage.get_key_focus();
         if (global.display.focus_window !== w || (keyFocus !== null && keyFocus !== global.stage))
-            fail('foreground_mismatch', `Focus is outside the bound window; QCU never activates it (window=${global.display.focus_window?.get_title()}, actor=${keyFocus})`);
+            fail('foreground_mismatch', 'Focus is outside the bound window; QCU never activates it');
     }
 
     _point(w, g, x, y) {
@@ -132,12 +132,14 @@ export default class QCUBridge extends Extension {
             fail('invalid_coordinates', 'Coordinates must be finite numbers');
         if (x < g.x || y < g.y || x >= g.x+g.width || y >= g.y+g.height)
             fail('outside_target', 'Pointer is outside the bound window');
-        let actor = global.stage.get_actor_at_pos(Clutter.PickMode.ALL, x, y);
+        let actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
+        const chain = [];
         for (let i = 0; actor && i < 64; i++, actor = actor.get_parent()) {
             if (actor.meta_window === w)
                 return [x, y];
+            chain.push(actor.constructor.name);
         }
-        fail('point_occluded', 'Another surface or Shell UI covers this point');
+        fail('point_occluded', `Another surface or Shell UI covers (${x},${y}); actors: ${chain.join('/')}`);
     }
 
     _keys(key) {

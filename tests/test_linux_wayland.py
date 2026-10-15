@@ -108,6 +108,20 @@ def test_moved_capture_does_not_write_a_stale_image(tmp_path):
     assert error.value.reason=="target_changed" and not (tmp_path/"capture.png").exists()
 
 
+def test_client_shadow_capture_uses_buffer_origin_and_validates_frame(tmp_path):
+    n,_=native()
+    buffer=dict(x=70,y=90,width=4,height=2)
+    frame=dict(x=71,y=90,width=2,height=2)
+    png=encode_png(b"\0\0\xff\0"*8,4,2,32,16)
+    n._bound=({},dict(window_id="42"))
+    n._identity=lambda _:{}
+    n.geometry=lambda _:frame
+    n._request=lambda *a,**k:dict(bounds=buffer,frame_bounds=frame,png=base64.b64encode(png).decode())
+    result=n.capture({},str(tmp_path/"capture.png"))
+    assert result["coordinate_origin"]==dict(x=70,y=90)
+    assert result["bounds"]==buffer and result["frame_bounds"]==frame
+
+
 def test_wayland_backend_is_lazy_and_never_selects_xwayland(monkeypatch):
     api=object.__new__(AtspiAPI)
     api._native=None

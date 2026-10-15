@@ -6,3 +6,4 @@ recursive-include tests/fixtures *.js *.json *.cjs
 include scripts/qcu scripts/qcu.ps1 scripts/qcu.cmd scripts/benchmark_ui.py scripts/verify_macos_ax.py scripts/verify_windows_uia.py
 include scripts/verify_windows_native.py
 include scripts/verify_linux_atspi.py
+include scripts/verify_gnome_session.sh

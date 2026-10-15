@@ -23,8 +23,9 @@ const Clutter = {KEY_Control_L: 65507, KEY_a: 97, KEY_F6: 65475,
     get_default_backend: () => ({get_default_seat: () => ({create_virtual_device: k => k === 1 ? keyboard : mouse})}),
 };
 const globalMock = {get_pointer: () => pointer};
+const main = {sessionMode: {isLocked: false}, overview: {visible: false}, modalCount: 0};
 const context = {Clutter, Gio: {}, GLib: {get_monotonic_time: () => clock++, SOURCE_REMOVE: false,
-    idle_add(p, fn) { queueMicrotask(fn); }}, Meta: {}, Shell: {}, Main: {},
+    idle_add(p, fn) { queueMicrotask(fn); }}, Meta: {}, Shell: {}, Main: main,
     Extension: class {}, global: globalMock, console, TextDecoder, Bridge: null};
 vm.runInNewContext(source + '\nBridge = QCUBridge;', context);
 const Bridge = context.Bridge;
@@ -81,6 +82,13 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     onKey = () => { b._enabled = false; };
     await assert.rejects(input(b, 'press_key', {key: 'F6'}), e => e.dispatched === true);
     assert.deepEqual(events, [['key', 65475, 1], ['key', 65475, 0]]);
+    checks++;
+    const stage = {get_key_focus: () => stage};
+    globalMock.stage = stage;
+    globalMock.display = {focus_window: w};
+    Bridge.prototype._foreground.call({}, w); // Clutter returns the stage for default focus
+    stage.get_key_focus = () => ({shellMenu: true});
+    assert.throws(() => Bridge.prototype._foreground.call({}, w), e => e.reason === 'foreground_mismatch');
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
