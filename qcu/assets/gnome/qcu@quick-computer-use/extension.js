@@ -21,6 +21,25 @@ function tick() {
         return GLib.SOURCE_REMOVE;
     }));
 }
+function nextFrame() {
+    if (!global.stage?.schedule_update || !global.stage?.connect)
+        return tick();
+    return new Promise((resolve, reject) => {
+        let signal, timeout;
+        const finish = error => {
+            if (signal) global.stage.disconnect(signal);
+            if (timeout) GLib.source_remove(timeout);
+            error ? reject(error) : resolve();
+        };
+        signal = global.stage.connect('after-update', () => finish());
+        timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            timeout = 0;
+            finish(Object.assign(new Error('Compositor frame did not complete'), {reason: 'input_timeout'}));
+            return GLib.SOURCE_REMOVE;
+        });
+        global.stage.schedule_update();
+    });
+}
 
 export default class QCUBridge extends Extension {
     enable() {
@@ -295,8 +314,8 @@ export default class QCUBridge extends Extension {
                 const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
                 while (Math.abs(global.get_pointer()[0]-x) > 1 || Math.abs(global.get_pointer()[1]-y) > 1) {
                     if (GLib.get_monotonic_time() > pointerDeadline)
-                        fail('pointer_mismatch', 'Mutter pointer did not reach the requested position');
-                    await tick();
+                        fail('pointer_mismatch', `Mutter pointer did not reach (${x},${y}); actual=${global.get_pointer().slice(0,2)}`);
+                    await nextFrame();
                 }
                 this._point(w, g, x, y);
                 if (kind === 'drag' && i === 0) {

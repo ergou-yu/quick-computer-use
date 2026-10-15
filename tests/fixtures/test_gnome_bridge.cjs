@@ -26,7 +26,8 @@ const globalMock = {get_pointer: () => pointer};
 const main = {sessionMode: {isLocked: false}, overview: {visible: false}, modalCount: 0};
 const context = {Clutter, Gio: {}, GLib: {get_monotonic_time: () => clock++, SOURCE_REMOVE: false,
     idle_add(p, fn) { queueMicrotask(fn); }}, Meta: {}, Shell: {}, Main: main,
-    Extension: class {}, global: globalMock, console, TextDecoder, Bridge: null};
+    Extension: class {}, global: globalMock, console, TextDecoder, Bridge: null,
+    Config: {PACKAGE_VERSION: '50'}};
 vm.runInNewContext(source + '\nBridge = QCUBridge;', context);
 const Bridge = context.Bridge;
 const w = {}, g = {x: 10, y: 10, width: 300, height: 200};
@@ -89,6 +90,16 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     Bridge.prototype._foreground.call({}, w); // Clutter returns the stage for default focus
     stage.get_key_focus = () => ({shellMenu: true});
     assert.throws(() => Bridge.prototype._foreground.call({}, w), e => e.reason === 'foreground_mismatch');
+    checks++;
+    context.GLib.Variant = class { constructor(signature, value) { this.value = value; } };
+    let reply;
+    await new Bridge().RequestAsync([JSON.stringify({op: 'hello'})], {return_value: v => { reply = JSON.parse(v.value[0]); }});
+    assert.equal(reply.ok, true); // GNOME 50 has no Meta.is_wayland_compositor
+    assert.equal(reply.session_type, 'wayland');
+    context.Meta.is_wayland_compositor = () => false;
+    await new Bridge().RequestAsync([JSON.stringify({op: 'hello'})], {return_value: v => { reply = JSON.parse(v.value[0]); }});
+    assert.equal(reply.ok, false); // older GNOME X11 must still be refused
+    assert.equal(reply.reason, 'session_mismatch');
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
