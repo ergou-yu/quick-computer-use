@@ -43,6 +43,7 @@ function bridge() {
     b._foreground = () => {};
     b._geometry = () => ({bounds: g});
     b._point = (window, bounds, x, y) => [x, y];
+    b._pointerPosition = () => pointer.slice(0,2);
     return b;
 }
 const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, ':1.2');

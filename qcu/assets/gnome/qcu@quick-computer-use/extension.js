@@ -151,6 +151,18 @@ export default class QCUBridge extends Extension {
             fail('foreground_mismatch', 'Focus is outside the bound window; QCU never activates it');
     }
 
+    _pointerPosition() {
+        if (Number.parseInt(Config.PACKAGE_VERSION) === 50) {
+            const backend = global.backend.get_clutter_backend();
+            const sprite = backend.get_pointer_sprite(global.stage);
+            const point = sprite.get_coords();
+            if (!finite(point.x) || !finite(point.y))
+                fail('pointer_unavailable', 'The compositor pointer sprite has no coordinates');
+            return [point.x, point.y];
+        }
+        return global.get_pointer().slice(0,2);
+    }
+
     _point(w, g, x, y) {
         if (!finite(x) || !finite(y))
             fail('invalid_coordinates', 'Coordinates must be finite numbers');
@@ -353,7 +365,7 @@ export default class QCUBridge extends Extension {
                 await send(t => this._pointer.notify_absolute_motion(t, x, y));
                 // Delivery can be asynchronous; wait only on the observed pointer.
                 const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
-                while (Math.abs(global.get_pointer()[0]-x) > 1 || Math.abs(global.get_pointer()[1]-y) > 1) {
+                while (Math.abs(this._pointerPosition()[0]-x) > 1 || Math.abs(this._pointerPosition()[1]-y) > 1) {
                     if (GLib.get_monotonic_time() > pointerDeadline)
                         fail('pointer_mismatch', `Mutter pointer did not reach (${x},${y}); actual=${global.get_pointer().slice(0,2)}`);
                     await nextFrame();
@@ -381,7 +393,7 @@ export default class QCUBridge extends Extension {
             }
             for (const direction of scroll)
                 await send(t => this._pointer.notify_discrete_scroll(t, direction, Clutter.ScrollSource.WHEEL));
-            const [x, y] = global.get_pointer();
+            const [x, y] = this._pointerPosition();
             return {events, pointer_position: {x, y}, pointer_motion: 'virtual_absolute'};
         } catch (e) {
             e.dispatched = sent;
