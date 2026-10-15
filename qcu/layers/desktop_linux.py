@@ -307,7 +307,8 @@ class DesktopLinuxLayer:
             return self._call(self._observe, max_depth, options)
         except Exception as exc:
             self._refs.invalidate()
-            self._cap.update(available=False, reason=getattr(exc, "reason", "atspi_error"))
+            self._cap.update(available=False, session_accessible=False, can_read_controls=False,
+                             reason=getattr(exc, "reason", "atspi_error"))
             return Observation("desktop", routing_meta=dict(layer=self.name, available=False,
                 reason=self._cap["reason"], error=str(exc), capabilities=self.capabilities(), **getattr(exc, "data", {})))
 
@@ -404,12 +405,26 @@ class DesktopLinuxLayer:
                 p.update(x=info["bounds"].cx, y=info["bounds"].cy)
             if obj and kind == "press_key" and not info["focused"]:
                 raise LinuxError("focus_mismatch", "Requested ref is not focused")
+            if kind == "drag":
+                for ref_key, xkey, ykey, container in (("ref_from","x","y","from"),("ref_to","x2","y2","to")):
+                    if p.get(ref_key):
+                        if xkey in p or ykey in p or container in p or (ref_key=="ref_from" and ("x1" in p or "y1" in p)):
+                            raise LinuxError("ref_coordinate_conflict", "Drag endpoint mixes a ref and coordinates")
+                        endpoint=self._api.info(self._get(p[ref_key]))
+                        if not endpoint["enabled"] or endpoint["offscreen"] or not endpoint["bounds"]:
+                            raise LinuxError("control_unavailable", "Drag endpoint is disabled, offscreen or lacks bounds")
+                        p[xkey],p[ykey]=endpoint["bounds"].cx,endpoint["bounds"].cy
             self._bind_native(root)
             data = self._api.native.dispatch(self.current_target, kind, p)
         else:
             if kind not in _SEMANTIC or obj is None:
                 raise LinuxError("unsupported", "Use a semantic ref or an explicit X11 native action")
-            send = self._api.prepare(obj, kind, p)
+            try:
+                send = self._api.prepare(obj, kind, p)
+            except LinuxError as exc:
+                if kind=="click" and p.get("fallback")=="native" and exc.reason=="unsupported":
+                    return self._act(Action("click", dict(p,input_mode="native")))
+                raise
             try:
                 accepted = send()
             except Exception as exc:

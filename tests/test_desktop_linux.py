@@ -215,3 +215,37 @@ def test_gi_text_interface_does_not_call_accessible_interface_getter():
         def get_role_name(self): return "entry"
         def get_name(self): return "Name"
     assert api.info(GIObject())["value"]=="中文 🚀"
+
+
+def install_native(monkeypatch):
+    from types import SimpleNamespace
+    calls=[]
+    native=SimpleNamespace(bind=lambda *args:None,
+        dispatch=lambda target,kind,p: calls.append((kind,p)) or dict(target=target,method="X11.XTEST"))
+    monkeypatch.setattr(API,"native",property(lambda _:native))
+    return calls
+
+
+def test_native_drag_uses_live_ref_endpoints(linux,monkeypatch):
+    layer,_,_,refs=linux
+    calls=install_native(monkeypatch)
+    assert layer.act(Action("drag",dict(ref_from=refs["Input"],ref_to=refs["Save"])) ).ok
+    assert len(calls)==1 and calls[0][1]["x"]==60 and calls[0][1]["y2"]==35
+    bad=layer.act(Action("drag",dict(ref_from=refs["Input"],x1=10,y1=20,ref_to=refs["Save"])))
+    assert bad.data["reason"]=="ref_coordinate_conflict" and len(calls)==1
+
+
+def test_explicit_click_fallback_only_precedes_semantic_send(linux,monkeypatch):
+    layer,_,api,refs=linux
+    calls=install_native(monkeypatch)
+    def unsupported(*args): raise LinuxError("unsupported","No Action")
+    api.prepare=unsupported
+    result=layer.act(Action("click",dict(ref=refs["Save"],fallback="native")))
+    assert result.ok and len(calls)==1 and not api.calls
+
+
+def test_late_error_cannot_enter_explicit_fallback(linux):
+    layer,_,api,refs=linux
+    api.send_error=True
+    result=layer.act(Action("click",dict(ref=refs["Save"],fallback="native")))
+    assert result.dispatch_state=="unknown" and len(api.calls)==1
