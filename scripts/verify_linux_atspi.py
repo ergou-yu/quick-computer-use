@@ -47,7 +47,7 @@ def verify(output):
                                 capture_output=True,encoding="utf-8",timeout=40)
             try: result=json.loads(proc.stdout)
             except ValueError: raise AssertionError(proc.stdout+proc.stderr) from None
-            if record: report["records"].append(dict(command=list(args),code=proc.returncode,
+            if record: report["records"].append(dict(command=list(args),payload=payload,code=proc.returncode,
                 wall_ms=(time.perf_counter()-start)*1000,result=result))
             if expect is not None: assert proc.returncode==expect,(args,result,proc.stderr)
             return result
@@ -130,6 +130,17 @@ def verify(output):
             command("move",x=420,y=250)
             moved=act("screenshot",dict(path=str(output.parent/"linux-moved.png")))
             assert moved["data"]["coordinate_origin"]!=before["data"]["coordinate_origin"],moved
+            if wayland:
+                assert act("click",dict(ref=r["Save"],input_mode="native",verify=evidence("Saved 3")))["outcome"]=="verified"
+                extensions=Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SESSION,Gio.DBusProxyFlags.DO_NOT_AUTO_START,
+                    None,"org.gnome.Shell","/org/gnome/Shell","org.gnome.Shell.Extensions",None)
+                extensions.call_sync("DisableExtension",GLib.Variant("(s)",("qcu@quick-computer-use",)),0,3000,None)
+                blocked=act("press_key",dict(key="F6"),expect=2)
+                assert blocked["dispatch_state"]=="not_sent" and blocked["data"]["reason"]=="wayland_bridge_unavailable",blocked
+                assert act("fill",dict(ref=r["Name"],text="Semantic without bridge"))["outcome"]=="verified"
+                extensions.call_sync("EnableExtension",GLib.Variant("(s)",("qcu@quick-computer-use",)),0,3000,None)
+                blocked=act("press_key",dict(key="F6"),expect=2)
+                assert blocked["dispatch_state"]=="not_sent" and blocked["data"]["reason"]=="target_changed",blocked
             assert act("fill",dict(ref=r["Name"],text="Semantic still fast"))["outcome"]=="verified"
             report.update(ok=True,cli_commands=len(report["records"]),target=obs["routing_meta"]["target"])
         except Exception as exc:

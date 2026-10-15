@@ -19,7 +19,7 @@ jobs:
       - name: Install GNOME and Python
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri
+          sudo apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
           python3 -m venv --system-site-packages .venv
           .venv/bin/python -m pip install -e '.[linux,dev]' build
       - name: Run GTK and native bridge in a real GNOME Wayland compositor
@@ -72,7 +72,9 @@ jobs:
       - name: Install current Ubuntu LTS GNOME
         run: |
           apt-get update
-          apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri
+          apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
+          mkdir -p /run/dbus
+          dbus-daemon --system --fork
           python3 -m venv --system-site-packages .venv
           .venv/bin/python -m pip install -e '.[linux,dev]'
           useradd --create-home --shell /bin/bash qcu-ci
