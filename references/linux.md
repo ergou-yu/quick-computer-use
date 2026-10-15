@@ -88,6 +88,9 @@ Shortcuts use the existing keymap's base/shift group; missing keys and other
 groups fail. Mixed DPI/monitor/keymap combinations need per-target validation.
 After a partial send only this action's held events are released; no transport
 switch or retry follows. Result evidence comes from AT-SPI postconditions.
+Drag endpoints can also use `ref_from`/`ref_to` with live bounds. A ref click's
+explicit `fallback:"native"` is honored only if a semantic interface/action is
+unsupported before dispatch; a late AT-SPI error cannot trigger fallback.
 
 ## Wayland
 

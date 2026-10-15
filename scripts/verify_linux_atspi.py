@@ -6,6 +6,7 @@ change compositor settings, alter keymaps/clipboards or touch user apps.
 from __future__ import annotations
 import argparse
 import json
+import importlib.metadata
 import os
 from pathlib import Path
 import subprocess
@@ -21,7 +22,8 @@ def verify(output):
     root=Path(__file__).resolve().parents[1]
     output=Path(output).absolute()
     output.parent.mkdir(parents=True,exist_ok=True)
-    report=dict(platform=sys.platform,environment={k:os.environ.get(k) for k in ("XDG_SESSION_TYPE","DISPLAY")},
+    report=dict(platform=sys.platform,python=sys.version,qcu_version=importlib.metadata.version("qcu"),
+                environment={k:os.environ.get(k) for k in ("XDG_SESSION_TYPE","DISPLAY")},
                 ok=False,records=[])
     with tempfile.TemporaryDirectory(prefix="qcu-linux-live-") as tmp:
         state=Path(tmp)
@@ -47,7 +49,7 @@ def verify(output):
         def act(kind,params,expect=0):
             return call("act","-",payload=dict(type=kind,params=params),expect=expect)
         def observed(): return call("observe","--compact")
-        def refs(obs): return {e["name"]:e["ref"] for e in obs["elements"] if e.get("name")}
+        def refs(obs): return {(e.get("name") or e.get("value")):e["ref"] for e in obs["elements"] if e.get("name") or e.get("value")}
         def command(op,**data):
             staged=commands.with_suffix(".tmp")
             staged.write_text(json.dumps(dict(op=op,**data)))
@@ -129,6 +131,7 @@ def verify(output):
                     fixture.kill()
                     fixture.wait()
                 log.close()
+                report["cli_commands"]=len(report["records"])
                 output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     return report
 

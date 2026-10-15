@@ -56,7 +56,7 @@ jobs:
       - name: Build packages
         run: .venv/bin/python -m build
       - name: Print fixture diagnostics
-        if: failure()
+        if: always()
         run: |
           .venv/bin/python - <<'PY'
           import json
@@ -73,6 +73,19 @@ jobs:
                       print('Read errors:',result.get('routing_meta',{}).get('read_errors'))
           for path in Path('linux-evidence').glob('*.fixture.log'):
               print(path.read_text()[-5000:])
+          PY
+      - name: Mirror disposable fixture evidence to job log
+        if: always()
+        run: |
+          .venv/bin/python - <<'PY'
+          import base64
+          from pathlib import Path
+          for name in ('linux-live.json','linux-before.png','linux-moved.png'):
+              path=Path('linux-evidence')/name
+              if path.exists():
+                  data=path.read_bytes()
+                  for index,start in enumerate(range(0,len(data),9000)):
+                      print('QCU_EVIDENCE',name,index,base64.b64encode(data[start:start+9000]).decode())
           PY
       - name: Save test evidence
         if: always()
