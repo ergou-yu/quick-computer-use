@@ -48,9 +48,9 @@ def desktop_capabilities(*, layer: str | None = None,
     platform = platform_name(platform)
     layer = layer or desktop_backend_name(platform)
     dependency = {"desktop_ax": "ApplicationServices",
-                  "desktop_uia": "uiautomation"}.get(layer)
-    intended = {"desktop_ax": "darwin", "desktop_uia": "win32"}.get(layer)
-    implemented = layer in {"desktop_ax", "desktop_uia", "desktop_appleevents"}
+                  "desktop_uia": "uiautomation", "desktop_linux": "gi"}.get(layer)
+    intended = {"desktop_ax": "darwin", "desktop_uia": "win32", "desktop_linux": "linux"}.get(layer)
+    implemented = layer in {"desktop_ax", "desktop_uia", "desktop_linux", "desktop_appleevents"}
     deps = dependency_exists(dependency) if dependency else False
     reason = "target_not_probed"
     accessible: bool | None = None
@@ -72,14 +72,16 @@ def desktop_capabilities(*, layer: str | None = None,
         "dependencies_present": deps, "dependency": dependency,
         "session_accessible": accessible, "can_read_controls": None if accessible is None else False,
         "supported_actions": (["click", "invoke", "fill", "toggle", "select"]
-                              if layer == "desktop_uia" else
+                              if layer in {"desktop_uia", "desktop_linux"} else
                               ["click", "fill", "press_key", "scroll"] if layer == "desktop_ax" else []),
-        "result_verification": implemented and layer in {"desktop_ax", "desktop_uia"},
+        "result_verification": implemented and layer in {"desktop_ax", "desktop_uia", "desktop_linux"},
         "foreground_input_required": "action_dependent",
         "native_actions": (["screenshot","click","double_click","right_click","hover","type","press_key","scroll","drag"]
-                           if layer == "desktop_uia" else []),
-        "native_input_transports": ["window_message","send_input"] if layer == "desktop_uia" else [],
-        "target_window_capture": layer in {"desktop_ax","desktop_uia"},
+                           if layer in {"desktop_uia", "desktop_linux"} else []),
+        "native_input_transports": (["window_message","send_input"] if layer == "desktop_uia" else
+                                    ["x11_xtest"] if layer == "desktop_linux" else []),
+        "target_window_capture": layer in {"desktop_ax","desktop_uia","desktop_linux"},
+        "native_session_support": "X11 only; Wayland semantic AT-SPI only" if layer == "desktop_linux" else None,
         "available": False, "reason": reason,
         "verification_status": "Windows 10 native fixture verified (2026-10-14)" if layer == "desktop_uia" else None,
     }

@@ -98,7 +98,7 @@ def _try_import(name: str) -> None:
         "desktop_jsbridge": "qcu.layers.desktop_jsbridge",
         "desktop_uia": "qcu.layers.desktop_uia",
         "screenshot_fallback": "qcu.layers.screenshot_fallback",
-        "desktop_linux": "qcu.layers.desktop_unsupported",
+        "desktop_linux": "qcu.layers.desktop_linux",
         "desktop_harmony": "qcu.layers.desktop_unsupported",
         "desktop_unsupported": "qcu.layers.desktop_unsupported",
     }.get(name)

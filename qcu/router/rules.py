@@ -154,9 +154,9 @@ RULES: list[Rule] = [
         "desktop_uia", "Windows desktop target; use UIA semantic Patterns.",
     ),
     (
-        68, "desktop_linux_unimplemented",
+        68, "desktop_linux",
         lambda f: _f(f, "context") == "desktop" and _f(f, "desktop_backend", desktop_backend_name()) == "desktop_linux",
-        "desktop_linux", "Linux desktop backend is not implemented.",
+        "desktop_linux", "Linux desktop target; use bound-window AT-SPI semantic controls.",
     ),
     (
         68, "desktop_harmony_unimplemented",

@@ -36,8 +36,9 @@ def test_missing_dependency_and_unimplemented_are_distinct(monkeypatch):
     assert cap["implemented"] and not cap["dependencies_present"]
     assert cap["reason"] == "dependency_missing"
     linux = platforms.desktop_capabilities(platform="linux")
-    assert linux["implemented"] is False
-    assert linux["reason"] == "backend_not_implemented"
+    assert linux["implemented"] is True
+    assert linux["reason"] == "dependency_missing"
+    assert platforms.desktop_capabilities(platform="harmony")["reason"] == "backend_not_implemented"
 
 
 def test_platform_import_does_not_import_windows_dependencies():

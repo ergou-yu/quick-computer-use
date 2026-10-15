@@ -4,7 +4,6 @@ from qcu.layers.runtime import register
 from qcu.platforms import desktop_capabilities
 
 
-@register("desktop_linux")
 @register("desktop_harmony")
 @register("desktop_unsupported")
 class UnsupportedDesktopLayer:
