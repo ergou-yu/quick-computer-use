@@ -6,6 +6,7 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 
 const XML = `<node><interface name="org.qcu.Wayland1">
 <method name="Request"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
@@ -60,7 +61,10 @@ export default class QCUBridge extends Extension {
             if (payload.length > 100000)
                 fail('invalid_request', 'Request too large');
             const r = JSON.parse(payload);
-            if (!Meta.is_wayland_compositor())
+            // GNOME 50 removed the X11 compositor and this legacy probe.
+            const wayland = typeof Meta.is_wayland_compositor === 'function'
+                ? Meta.is_wayland_compositor() : Number.parseInt(Config.PACKAGE_VERSION) === 50;
+            if (!wayland)
                 fail('session_mismatch', 'GNOME bridge requires Wayland');
             if (r.op === 'hello') {
                 answer = {protocol: 1, instance: this._instance, session_type: 'wayland'};
