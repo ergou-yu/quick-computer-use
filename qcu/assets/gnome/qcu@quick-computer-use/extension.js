@@ -153,7 +153,7 @@ export default class QCUBridge extends Extension {
 
     _pointerPosition() {
         if (Number.parseInt(Config.PACKAGE_VERSION) === 50) {
-            const backend = global.backend.get_clutter_backend();
+            const backend = Clutter.get_default_backend();
             const sprite = backend.get_pointer_sprite(global.stage);
             const point = sprite.get_coords();
             if (!finite(point.x) || !finite(point.y))
