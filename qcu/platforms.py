@@ -71,13 +71,15 @@ def desktop_capabilities(*, layer: str | None = None,
         "backend": layer, "platform": platform, "implemented": implemented,
         "dependencies_present": deps, "dependency": dependency,
         "session_accessible": accessible, "can_read_controls": None if accessible is None else False,
-        "supported_actions": (["click", "invoke", "fill", "toggle", "select"]
-                              if layer in {"desktop_uia", "desktop_linux"} else
+        "supported_actions": (["click", "invoke", "fill", "toggle", "select", "type"] if layer == "desktop_linux" else
+                              ["click", "invoke", "fill", "toggle", "select"] if layer == "desktop_uia" else
                               ["click", "fill", "press_key", "scroll"] if layer == "desktop_ax" else []),
         "result_verification": implemented and layer in {"desktop_ax", "desktop_uia", "desktop_linux"},
         "foreground_input_required": "action_dependent",
         "native_actions": (["screenshot","click","double_click","right_click","hover","type","press_key","scroll","drag"]
-                           if layer in {"desktop_uia", "desktop_linux"} else []),
+                           if layer == "desktop_uia" else
+                           ["screenshot","click","double_click","right_click","hover","press_key","scroll","drag"]
+                           if layer == "desktop_linux" else []),
         "native_input_transports": (["window_message","send_input"] if layer == "desktop_uia" else
                                     ["x11_xtest"] if layer == "desktop_linux" else []),
         "target_window_capture": layer in {"desktop_ax","desktop_uia","desktop_linux"},

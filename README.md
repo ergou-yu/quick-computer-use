@@ -1,11 +1,14 @@
 # QCU — Quick Computer Use
 
-**1.9.2.** QCU controls an explicitly selected browser page or
+**1.10.0.** QCU controls an explicitly selected browser page or
 desktop window with accessibility references. This revision binds references to
 a backend lifetime, target and observation; separates dispatch from verified
 results; and supports Windows UI Automation. Real Windows 10 native and CLI
 fixtures are verified; persistent DOM/CDP, compact observations, cached queries
 and bounded batches retain their fast paths.
+
+Linux now provides an AT-SPI2 semantic backend and an optional X11 screenshot/
+XTEST input fallback. See [Linux setup and limits](references/linux.md).
 
 ## Install
 
@@ -61,13 +64,13 @@ Preserve the selected target. Tests must use an independent `QCU_HOME`.
 |---|---|---|
 | macOS | `desktop_ax` | AX controls/actions, bounded window capture and safety checks |
 | Windows | `desktop_uia` | Semantic patterns; native HWND PNG screenshots and guarded mouse/keyboard message fallback; real WinForms verification |
-| Linux | `desktop_linux` | Explicitly not implemented; registration extension point |
+| Linux | `desktop_linux` | AT-SPI2 semantic controls; optional bound-window X11 capture/XTEST input; Wayland semantics only |
 | HarmonyOS | `desktop_harmony` | Explicitly not implemented; registration extension point |
 
 Apple Events is an explicit **read-only legacy observer** in this preview; its
 positional action references cannot meet the new control guarantees. Start AX
 observation to obtain actionable refs. General icon/template/VLM grounding,
-Linux/HarmonyOS desktop control is not implemented. Windows native capture/input
+HarmonyOS desktop control is not implemented. Windows native capture/input
 uses no extra package or paid visual service. Physical SendInput is an explicit
 option with target-specific delivery; the verified default fallback uses HWND
 messages. Secure desktops and full provider parity are not claimed.
@@ -102,7 +105,7 @@ the default for all web ref actions.
 
 ## Tests
 
-See [TEST-REPORT.md](TEST-REPORT.md) for the 1.9.2 Windows results,
+See [TEST-REPORT.md](TEST-REPORT.md) for platform results,
 reproduction commands and the unconfirmed physical SendInput diagnostic.
 
 ```bash

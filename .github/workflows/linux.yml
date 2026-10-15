@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   linux:
     runs-on: ubuntu-24.04
@@ -16,15 +19,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 xvfb openbox
           python3 -m venv --system-site-packages .venv
-          .venv/bin/python -m pip install -e '.[linux,dev]' build
+          .venv/bin/python -m pip install -e '.[linux,dev]' build pytest-timeout
           .venv/bin/python -m playwright install --with-deps chromium
-      - name: Run regression suite
-        run: |
-          mkdir -p linux-evidence
-          set -o pipefail
-          .venv/bin/python -m pytest -q | tee linux-evidence/pytest.txt
       - name: Run real GTK, AT-SPI, X11 fixture
         run: |
+          mkdir -p linux-evidence
           dbus-run-session -- xvfb-run -a -s '-screen 0 1280x1024x24' bash -c '
             export NO_AT_BRIDGE=0 GTK_MODULES=gail:atk-bridge XDG_SESSION_TYPE=x11
             openbox >linux-evidence/openbox.log 2>&1 &
@@ -32,6 +31,10 @@ jobs:
             trap "kill $wm 2>/dev/null || true" EXIT
             .venv/bin/python scripts/verify_linux_atspi.py --output linux-evidence/linux-live.json
           '
+      - name: Run regression suite
+        run: |
+          set -o pipefail
+          .venv/bin/python -m pytest -q --timeout=60 --durations=15 | tee linux-evidence/pytest.txt
       - name: Build packages
         run: .venv/bin/python -m build
       - name: Save test evidence

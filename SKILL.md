@@ -1,9 +1,9 @@
 ---
 name: quick-computer-use
-description: "Operate browser interfaces and Windows/macOS desktop apps with QCU, preferring target-bound accessibility references. Windows UIA, native window screenshots, mouse/keyboard fallback and CDP bridges have live fixture validation. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
+description: "Operate browser interfaces and Windows/macOS/Linux desktop apps with QCU, preferring target-bound accessibility references. Supports Windows UIA, macOS AX, Linux AT-SPI2, optional native fallback and CDP bridges. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
 metadata:
   author: QCU contributors
-  version: "1.9.2"
+  version: "1.10.0"
   requires:
     bins: ["qcu"]
     packages: ["playwright>=1.40"]
@@ -11,13 +11,36 @@ metadata:
 license: MIT
 ---
 
-# Quick Computer Use — 1.9.2
+# Quick Computer Use — 1.10.0
 
 Use structured controls on the **selected target**. QCU reports target identity,
 reference lifetime, backend capabilities, dispatch and requested-result evidence.
 A successful API call or changing screen does not alone prove task completion.
 Windows UIA and the CLI/daemon pipeline were verified on a real Windows 10
 interactive desktop (2026-10-14). Each new target still requires a live probe.
+
+## Linux desktop
+
+Install the system GI/AT-SPI packages and use the desktop user's DBus session;
+see [Linux](references/linux.md). Use `desktop_linux` with an explicit PID and
+window title or returned bus/path window_id. Refs remain bound to the worker,
+process lifetime, unique DBus owner/path, session and observation generation.
+
+Prefer AT-SPI ref actions (`click`, `fill`, `toggle`, `select`) and normal
+compact/cached reads and batches. Semantic actions do not screenshot or load
+X11. `type` needs a focused writable EditableText ref and unselected caret;
+use `fill` for replacement and Unicode text. No clipboard/keymap changes occur.
+
+On X11, screenshot and explicit native actions borrow the AT-SPI target through
+an exact PID/title match to one EWMH client. XTEST input requires owned focus,
+an active window and unobstructed pointer points; it never activates a window.
+Use native screenshot coordinates or current refs; re-locate after movement.
+Native `press_key` uses the existing keymap; unsupported layout groups fail.
+On Wayland, AT-SPI semantic actions remain available when exposed by the app;
+native capture/input explicitly fails until a compositor/portal adapter exists.
+Do not bypass portal consent, silently use XWayland, or substitute a screenshot
+transport after a dispatched or unknown action. Linux fixtures must be isolated;
+GTK/Xvfb CI is a virtual desktop test, not physical-machine validation.
 
 ## Windows entrypoints and speed
 
@@ -208,6 +231,7 @@ actions to AX. No silent translation of old ref tokens is supported.
 
 - [API](references/api.md): states, conditions, commands and migration.
 - [Desktop](references/desktop.md): platform capabilities, patterns and limits.
+- [Linux](references/linux.md): AT-SPI installation, X11 fallback and Wayland limits.
 - [Routing](references/routing.md): backend selection and diagnostics.
 - [Install](INSTALL.md): isolated dependencies and live verification scripts.
 - `scripts/benchmark_ui.py`: disposable Chromium form execution measurements;

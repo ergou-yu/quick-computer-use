@@ -1,4 +1,4 @@
-# Routing and target binding — 1.9.2
+# Routing and target binding — 1.10.0
 
 The router remains a small priority rule chain. `qcu/router/rules.py` and
 `qcu/platforms.py` are the source of truth; decisions are recorded in telemetry.
@@ -10,7 +10,7 @@ The router remains a small priority rule chain. `qcu/router/rules.py` and
 | Web | `web_a11y`, attached to QCU's selected Chromium page |
 | macOS desktop | `desktop_ax` |
 | Windows desktop | `desktop_uia` |
-| Linux desktop | `desktop_linux` (not implemented) |
+| Linux desktop | `desktop_linux` (AT-SPI2; optional X11 fallback) |
 | HarmonyOS desktop | `desktop_harmony` (not implemented) |
 
 Explicit `--layer` requests are subject to session/target compatibility. An
@@ -60,6 +60,7 @@ postcondition evidence before claiming task completion.
 
 Register a platform name/backend with `register_desktop_backend`, register the
 Layer constructor with `runtime.register`, and implement the common contracts
-and conservative capabilities. Keep platform imports lazy. Linux/HarmonyOS
-currently return explicit unsupported observations/actions. The interface does
+and conservative capabilities. Keep platform imports lazy. HarmonyOS
+currently returns explicit unsupported observations/actions. Linux uses AT-SPI2
+and explicitly refuses unsupported Wayland native actions. The interface does
 not imply that a provider, OCR model, explorer graph or vision service exists.

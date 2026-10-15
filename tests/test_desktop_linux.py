@@ -32,7 +32,7 @@ class API:
     def native(self):
         pytest.fail("Semantic actions must not load X11, take screenshots or inject input")
 
-    def windows(self):
+    def windows(self, pid=None):
         return [self.root]
 
     def key(self, obj):

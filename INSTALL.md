@@ -1,4 +1,4 @@
-# Install QCU 1.9.2
+# Install QCU 1.10.0
 
 Python 3.11 or newer. Install into the environment that runs `qcu`; a different
 Python may have different dependencies and macOS permission identity.
@@ -8,6 +8,9 @@ Python may have different dependencies and macOS permission identity.
 - Web: `python -m pip install -e .`, then `python -m playwright install chromium`.
 - macOS: `python -m pip install -e '.[macos,dev]'`.
 - Windows PowerShell: `py -m pip install -e ".[windows,dev]"`.
+- Linux: install system GI/AT-SPI, then `python3 -m venv --system-site-packages .venv`
+  and `.venv/bin/python -m pip install -e '.[linux,dev]'`.
+  See [Linux setup](references/linux.md) for the distribution packages and session requirements.
 
 For an isolated Windows install from this directory:
 
@@ -28,10 +31,10 @@ use `$json | & .\scripts\qcu.ps1 act -` (or `batch -`) to preserve JSON quoting.
 ## Packaged wheel
 
 ```bash
-python -m pip install 'qcu-1.9.2-py3-none-any.whl[macos]'
+python -m pip install 'qcu-1.10.0-py3-none-any.whl[macos]'
 ```
 
-On Windows replace `[macos]` with `[windows]`; omit extras for web. Chromium is
+On Windows replace `[macos]` with `[windows]`, on Linux with `[linux]`; omit extras for web. Chromium is
 needed only for web operations. UIA is loaded lazily on Windows on its own
 persistent COM worker. The `windows` extra installs `uiautomation>=2.0`; it is
 never required for macOS or web. The library's transitive `comtypes` dependency

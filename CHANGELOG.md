@@ -3,6 +3,19 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] — 2026-10-15
+
+- Implement Linux AT-SPI2 observation and semantic actions on a resident worker,
+  with process lifetime, unique bus/path, session and generation-bound refs.
+- Add optional exact-client X11 PNG capture and guarded XTEST pointer/keyboard
+  fallback. Native modules remain lazy; semantic actions do not screenshot.
+- Preserve DOM/CDP, cached/compact reads and bounded batches. Upgrade the Bash
+  source shim to prefer the local venv and work outside the repository.
+- Refuse unsupported Wayland native requests explicitly; retain available
+  AT-SPI semantics without bypassing compositor/portal consent.
+- Add contract tests and disposable GTK/DBus/Xvfb/Openbox Linux CI evidence.
+  Virtual Linux desktop coverage is distinct from physical-machine validation.
+
 ## [1.9.2] — 2026-10-15
 
 - Add native bound-HWND PrintWindow/GDI capture with stdlib PNG output,

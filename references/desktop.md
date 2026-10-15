@@ -1,7 +1,7 @@
-# Desktop backends — 1.9.2
+# Desktop backends — 1.10.0
 
-Desktop selects the current platform: macOS AX, Windows UIA, or an explicit
-unimplemented Linux/HarmonyOS backend. It never defaults to macOS on Windows.
+Desktop selects the current platform: macOS AX, Windows UIA, Linux AT-SPI2,
+or an explicit unimplemented HarmonyOS backend.
 The common Layer/Observation/Action/LayerResult contracts are shared with web.
 
 ## Capability report
@@ -251,5 +251,6 @@ Official technical references:
 
 Register a platform selector using `qcu.platforms.register_desktop_backend`,
 then register its Layer through `qcu.layers.runtime.register`. Missing platforms
-return `backend_not_implemented`. Linux and HarmonyOS have registration points
-only; neither has a full backend in this preview.
+return `backend_not_implemented`. HarmonyOS remains a registration point.
+Linux uses AT-SPI2 on a resident worker; its X11 native fallback and Wayland
+limits are documented in [Linux](linux.md).

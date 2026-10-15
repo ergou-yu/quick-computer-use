@@ -59,7 +59,8 @@ class AtspiAPI:
             if not context.pending():
                 break
             context.iteration(False)
-        obj.clear_cache()
+        clear = getattr(obj, "clear_cache_single", None) or obj.clear_cache
+        clear()
 
     def key(self, obj):
         bus, path = str(obj.app.bus_name), str(obj.path)
@@ -73,13 +74,15 @@ class AtspiAPI:
     def children(self, obj, limit):
         return [obj.get_child_at_index(i) for i in range(min(obj.get_child_count(), limit))]
 
-    def windows(self):
+    def windows(self, pid=None):
         desktop = self.a.get_desktop(0)
         if desktop is None:
             raise LinuxError("accessibility_bus_unavailable", "AT-SPI desktop is unavailable")
         windows = []
         for app in self.children(desktop, 256):
             if app is None:
+                continue
+            if pid is not None and self.pid(app) != pid:
                 continue
             for obj in self.children(app, 128):
                 if obj is not None and obj.get_role_name() in {"frame", "dialog", "window", "alert"}:
@@ -106,7 +109,9 @@ class AtspiAPI:
             value = text.get_text(0, min(text.get_character_count(), 16384))
         return dict(name=obj.get_name(), raw_role=role, value=value, bounds=bounds,
                     enabled=has("ENABLED") and has("SENSITIVE"), focused=has("FOCUSED"),
-                    offscreen=not has("SHOWING"), checked=has("CHECKED"), selected=has("SELECTED"),
+                    offscreen=not has("SHOWING"),
+                    checked=has("CHECKED") if role in {"check box", "radio button", "toggle button", "check menu item", "radio menu item"} else None,
+                    selected=has("SELECTED") if has("SELECTABLE") else None,
                     editable=has("EDITABLE"), interfaces=sorted(interfaces))
 
     def action_index(self, obj):
@@ -240,7 +245,7 @@ class DesktopLinuxLayer:
         if pid is None and window is None and app is None:
             return self._validate_window()
         candidates = []
-        for obj in self._api.windows():
+        for obj in self._api.windows(pid=pid):
             if pid is not None and self._api.pid(obj) != pid:
                 continue
             name = self._api.info(obj)["name"]
@@ -354,7 +359,10 @@ class DesktopLinuxLayer:
 
     def _act(self, action):
         p, kind = dict(action.params), action.type
-        validate_condition(p.get("verify"))
+        try:
+            validate_condition(p.get("verify"))
+        except ValueError as exc:
+            raise LinuxError("invalid_verification", str(exc)) from None
         root = self._validate_window()
         self._check_options(p)
         condition = p.get("verify")
@@ -367,6 +375,8 @@ class DesktopLinuxLayer:
             raise LinuxError("control_disabled" if not info["enabled"] else "control_offscreen", "Control cannot receive input")
         if obj and ("x" in p or "y" in p):
             raise LinuxError("ref_coordinate_conflict", "Use live refs or coordinates, not both")
+        if kind == "toggle" and info and info["checked"] is None:
+            raise LinuxError("unsupported", "This control does not expose a toggle state")
         if kind in {"fill", "type"}:
             if obj is None or not info["editable"]:
                 raise LinuxError("control_readonly", "A writable EditableText reference is required")

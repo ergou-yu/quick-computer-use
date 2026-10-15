@@ -184,5 +184,6 @@ UIA worker timeout blocks new work in that worker until restart/re-observation.
    that a missing desktop window will expand to the whole application.
 5. Migrate Apple Events actions to newly observed AX controls. Apple Events is
    an explicit read-only legacy observer; pid/window scoping is unsupported.
-6. Query platform/target capabilities. Windows is a minimal preview, not full
-   desktop parity; Linux/HarmonyOS are explicit unimplemented registrations.
+6. Query platform/target capabilities. Windows UIA and Linux AT-SPI2 expose
+   target-specific capabilities; Linux native capture/input requires X11.
+   HarmonyOS is an explicit unimplemented registration.
