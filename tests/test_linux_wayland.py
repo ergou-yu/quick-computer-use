@@ -73,6 +73,14 @@ def test_identity_change_prevents_dispatch(monkeypatch):
     assert error.value.reason=="target_changed" and not error.value.dispatched and not calls
 
 
+def test_malformed_input_ack_is_unknown_after_mutation():
+    n,_=native(dict(ok=True))
+    n._identity=lambda _:dict(token="bound",window_id="42")
+    with pytest.raises(LinuxError) as error:
+        n.dispatch({},"press_key",dict(key="F6"))
+    assert error.value.reason=="outcome_unknown" and error.value.dispatched
+
+
 def test_scaled_capture_records_pixel_to_logical_coordinates(tmp_path):
     n,_=native()
     g=dict(x=-100,y=20,width=2,height=1)

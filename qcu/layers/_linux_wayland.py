@@ -99,16 +99,16 @@ class GnomeNative:
             sx, sy = width/g["width"], height/g["height"]
             if not (0 < width <= 16384 and 0 < height <= 16384 and width*height <= 32000000
                     and math.isclose(sx, sy, abs_tol=.01) and .5 <= sx <= 4):
-                raise ValueError("invalid PNG geometry or non-uniform scale")
+                raise ValueError(f"invalid PNG geometry or non-uniform scale: pixels={width}x{height}, bounds={g}")
         except (KeyError, ValueError, TypeError, ZeroDivisionError) as exc:
             raise LinuxError("capture_format_unsupported", str(exc)) from None
         self._identity(target)
-        if self.geometry(target) != g:
+        if self.geometry(target) != value.get("frame_bounds", g):
             raise LinuxError("target_changed", "Window moved during capture")
         output = Path(path).expanduser().absolute()
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(png)
-        return dict(path=str(output), target=dict(target), bounds=g,
+        return dict(path=str(output), target=dict(target), bounds=g, frame_bounds=value.get("frame_bounds", g),
             wayland_window_id=self._bound[1]["window_id"], method="GNOME.Shell.Screenshot",
             coordinate_origin=dict(x=g["x"], y=g["y"]), coordinate_scale=sx,
             coordinate_space="wayland_logical", pixel_size=dict(width=width, height=height))
@@ -118,6 +118,8 @@ class GnomeNative:
         value = self._request("input", mutation=True, binding=binding, kind=kind,
                               params={k: v for k, v in params.items() if k in {
                                   "key", "x", "y", "x1", "y1", "x2", "y2", "from", "to", "steps", "dx", "dy"}})
+        if type(value.get("events")) is not int or value["events"] < 1:
+            raise LinuxError("outcome_unknown", "Native reply did not confirm an event count", dispatched=True)
         return dict(target=dict(target), method="GNOME.Mutter.VirtualInputDevice",
                     wayland_window_id=binding["window_id"], retry_safe=False, input_mode="native",
                     coordinate_space="wayland_logical", events=value["events"],

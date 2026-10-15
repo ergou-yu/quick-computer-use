@@ -115,7 +115,8 @@ export default class QCUBridge extends Extension {
         const g = rect(frame);
         if (g.width <= 0 || g.height <= 0 || g.width > 8192 || g.height > 8192 || g.width*g.height > 16000000)
             fail('capture_too_large', 'Invalid or oversized target');
-        return {bounds: g, client_bounds: rect(w.frame_rect_to_client_rect(frame))};
+        return {bounds: g, client_bounds: rect(w.frame_rect_to_client_rect(frame)),
+            buffer_bounds: rect(w.get_buffer_rect())};
     }
 
     _foreground(w) {
@@ -177,9 +178,9 @@ export default class QCUBridge extends Extension {
             return {binding};
         }
         const w = this._window(r.binding, sender);
-        const {bounds: g, client_bounds: client} = this._geometry(w);
+        const {bounds: g, client_bounds: client, buffer_bounds: buffer} = this._geometry(w);
         if (r.op === 'geometry')
-            return {bounds: g, client_bounds: client};
+            return {bounds: g, client_bounds: client, buffer_bounds: buffer};
         this._foreground(w);
         if (r.op === 'capture') {
             const stream = Gio.MemoryOutputStream.new_resizable();
@@ -189,13 +190,16 @@ export default class QCUBridge extends Extension {
                     try { s.screenshot_window_finish(result); resolve(); } catch (e) { reject(e); }
                 }));
                 this._foreground(this._window(r.binding, sender));
-                if (!same(this._geometry(w).bounds, g))
+                const after = this._geometry(w);
+                if (!same(after.bounds, g) || !same(after.buffer_bounds, buffer))
                     fail('target_changed', 'Window moved during capture');
                 stream.close(null);
                 const bytes = stream.steal_as_bytes();
                 if (bytes.get_size() > 32000000)
                     fail('capture_too_large', 'PNG exceeds bridge limit');
-                return {bounds: g, png: GLib.base64_encode(bytes.get_data())};
+                // WindowActor.get_image (used by Shell.Screenshot) includes
+                // client-side transparent shadows, i.e. the buffer rectangle.
+                return {bounds: buffer, frame_bounds: g, png: GLib.base64_encode(bytes.get_data())};
             } finally {
                 if (!stream.is_closed())
                     stream.close(null);
@@ -208,6 +212,7 @@ export default class QCUBridge extends Extension {
 
     async _input(r, w, g, sender) {
         const p = r.params ?? {}, kind = r.kind;
+        const deadline = GLib.get_monotonic_time()+5000000;
         let points = [], keys = [], buttons = [], scroll = [];
         if (kind === 'press_key') {
             keys = this._keys(p.key);
@@ -255,6 +260,8 @@ export default class QCUBridge extends Extension {
         const send = async fn => {
             if (!this._enabled)
                 fail('target_changed', 'Bridge disabled');
+            if (GLib.get_monotonic_time() > deadline)
+                fail('input_timeout', 'Native action deadline expired');
             this._foreground(this._window(r.binding, sender));
             if (!same(this._geometry(w).bounds, g))
                 fail('target_changed', 'Window moved during input');
@@ -279,9 +286,9 @@ export default class QCUBridge extends Extension {
                 this._point(w, g, x, y);
                 await send(t => this._pointer.notify_absolute_motion(t, x, y));
                 // Delivery can be asynchronous; wait only on the observed pointer.
-                const deadline = GLib.get_monotonic_time()+500000;
+                const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
                 while (Math.abs(global.get_pointer()[0]-x) > 1 || Math.abs(global.get_pointer()[1]-y) > 1) {
-                    if (GLib.get_monotonic_time() > deadline)
+                    if (GLib.get_monotonic_time() > pointerDeadline)
                         fail('pointer_mismatch', 'Mutter pointer did not reach the requested position');
                     await tick();
                 }
