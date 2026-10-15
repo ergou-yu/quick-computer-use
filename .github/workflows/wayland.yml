@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Test bridge failure boundaries
+        run: node tests/fixtures/test_gnome_bridge.cjs
       - name: Install GNOME and Python
         run: |
           sudo apt-get update

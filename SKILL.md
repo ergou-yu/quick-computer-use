@@ -3,7 +3,7 @@ name: quick-computer-use
 description: "Operate browser interfaces and Windows/macOS/Linux desktop apps with QCU, preferring target-bound accessibility references. Supports Windows UIA, macOS AX, Linux AT-SPI2, optional native fallback and CDP bridges. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
 metadata:
   author: QCU contributors
-  version: "1.10.0"
+  version: "1.11.0"
   requires:
     bins: ["qcu"]
     packages: ["playwright>=1.40"]
@@ -11,7 +11,7 @@ metadata:
 license: MIT
 ---
 
-# Quick Computer Use — 1.10.0
+# Quick Computer Use — 1.11.0
 
 Use structured controls on the **selected target**. QCU reports target identity,
 reference lifetime, backend capabilities, dispatch and requested-result evidence.
@@ -38,11 +38,17 @@ an exact PID/title match to one EWMH client. XTEST input requires owned focus,
 an active window and unobstructed pointer points; it never activates a window.
 Use native screenshot coordinates or current refs; re-locate after movement.
 Native `press_key` uses the existing keymap; unsupported layout groups fail.
-On Wayland, AT-SPI semantic actions remain available when exposed by the app;
-native capture/input explicitly fails until a compositor/portal adapter exists.
-Do not bypass portal consent, silently use XWayland, or substitute a screenshot
-transport after a dispatched or unknown action. Linux fixtures must be isolated;
-GTK/Xvfb CI is a virtual desktop test, not physical-machine validation.
+On GNOME 46 Wayland, install and explicitly enable the bundled GNOME bridge;
+see [Linux](references/linux.md). Native capture/input binds the same AT-SPI
+PID/title to one Mutter window and pins the Shell connection, extension instance
+and window sequence. Ref coordinates use live AT-SPI WINDOW bounds translated
+through Mutter; raw AT-SPI SCREEN positions on Wayland are not global coordinates.
+Use native screenshot metadata for coordinate clicks and pixel/logical scaling.
+Missing/disabled bridges fail without affecting semantic actions. Other Wayland
+compositors remain unsupported for native fallback. Do not bypass compositor or
+portal consent, silently use XWayland, or switch transport after dispatched or
+unknown input. Linux fixtures must be isolated; virtual compositor tests are
+distinct from physical-machine validation.
 
 ## Windows entrypoints and speed
 
@@ -104,7 +110,7 @@ Run `scripts/verify_windows_native.py --output result.json --check-send-input`.
   identity. Use an authorized existing-tab tool when that exact tab is required.
 - Web: `qcu session start --context web`. Native: `--context desktop`, then
   `qcu observe --pid <PID> --window <title-or-Windows-HWND> --compact`.
-  macOS selects AX, Windows selects UIA. Linux/HarmonyOS report unimplemented.
+  macOS selects AX, Windows selects UIA, Linux selects AT-SPI2. HarmonyOS is unimplemented.
 - Check `routing_meta.target` and `capabilities`. A specified missing/ambiguous
   window is an error with candidates, not an invitation to act on another
   window. Later native reads/actions inherit the binding.

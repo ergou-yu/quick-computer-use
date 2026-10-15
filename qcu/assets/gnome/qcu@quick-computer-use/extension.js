@@ -30,12 +30,24 @@ export default class QCUBridge extends Extension {
         this._pointer = this._keyboard = null;
         this._object = Gio.DBusExportedObject.wrapJSObject(XML, this);
         this._object.export(Gio.DBus.session, '/org/gnome/Shell/Extensions/QCU');
+        this._watch = Gio.DBus.session.signal_subscribe('org.freedesktop.DBus', 'org.freedesktop.DBus',
+            'NameOwnerChanged', '/org/freedesktop/DBus', null, Gio.DBusSignalFlags.NONE,
+            (_c, _s, _p, _i, _m, parameters) => {
+                const [name, , owner] = parameters.deep_unpack();
+                if (!owner) {
+                    for (const [token, b] of this._bindings) {
+                        if (b.sender === name)
+                            this._bindings.delete(token);
+                    }
+                }
+            });
     }
 
     disable() {
         this._enabled = false;
         this._object?.unexport();
         this._object = null;
+        Gio.DBus.session.signal_unsubscribe(this._watch);
         this._bindings.clear();
         // Pending requests release their own held keys/buttons in finally.
         if (!this._busy)
@@ -109,8 +121,9 @@ export default class QCUBridge extends Extension {
     _foreground(w) {
         if (Main.sessionMode.isLocked || Main.overview.visible || Main.modalCount > 0)
             fail('foreground_mismatch', 'Lock screen, overview or Shell modal is active');
-        if (global.display.focus_window !== w || global.stage.get_key_focus() !== null)
-            fail('foreground_mismatch', 'Focus is outside the bound window; QCU never activates it');
+        const keyFocus = global.stage.get_key_focus();
+        if (global.display.focus_window !== w || (keyFocus !== null && keyFocus !== global.stage))
+            fail('foreground_mismatch', `Focus is outside the bound window; QCU never activates it (window=${global.display.focus_window?.get_title()}, actor=${keyFocus})`);
     }
 
     _point(w, g, x, y) {
@@ -233,7 +246,7 @@ export default class QCUBridge extends Extension {
             Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.BUTTON2_MASK | Clutter.ModifierType.BUTTON3_MASK;
         if (mask & busy)
             fail('input_busy', 'A pointer button or modifier is already held');
-        const seat = Clutter.get_default_backend().get_default_seat();
+        const seat = global.backend?.get_default_seat?.() ?? Clutter.get_default_backend().get_default_seat();
         if (keys.length)
             this._keyboard ??= seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         else
@@ -252,8 +265,10 @@ export default class QCUBridge extends Extension {
         };
         try {
             for (const code of keys) {
-                heldKeys.push(code);
-                await send(t => this._keyboard.notify_keyval(t, code, Clutter.KeyState.PRESSED));
+                await send(t => {
+                    heldKeys.push(code);
+                    this._keyboard.notify_keyval(t, code, Clutter.KeyState.PRESSED);
+                });
             }
             for (const code of [...keys].reverse()) {
                 await send(t => this._keyboard.notify_keyval(t, code, Clutter.KeyState.RELEASED));
@@ -272,8 +287,10 @@ export default class QCUBridge extends Extension {
                 }
                 this._point(w, g, x, y);
                 if (kind === 'drag' && i === 0) {
-                    heldButtons.push(1);
-                    await send(t => this._pointer.notify_button(t, 1, Clutter.ButtonState.PRESSED));
+                    await send(t => {
+                        heldButtons.push(1);
+                        this._pointer.notify_button(t, 1, Clutter.ButtonState.PRESSED);
+                    });
                 }
             }
             if (kind === 'drag') {
@@ -282,8 +299,10 @@ export default class QCUBridge extends Extension {
             }
             for (const button of buttons) {
                 this._point(w, g, ...points[0]);
-                heldButtons.push(button);
-                await send(t => this._pointer.notify_button(t, button, Clutter.ButtonState.PRESSED));
+                await send(t => {
+                    heldButtons.push(button);
+                    this._pointer.notify_button(t, button, Clutter.ButtonState.PRESSED);
+                });
                 await send(t => this._pointer.notify_button(t, button, Clutter.ButtonState.RELEASED));
                 heldButtons = [];
             }

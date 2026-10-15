@@ -2,6 +2,7 @@ include SKILL.md CHANGELOG.md INSTALL.md TEST-REPORT.md
 recursive-include references *.md
 recursive-include examples *.py *.swift
 recursive-include tests *.py
+recursive-include tests/fixtures *.js *.json *.cjs
 include scripts/qcu scripts/qcu.ps1 scripts/qcu.cmd scripts/benchmark_ui.py scripts/verify_macos_ax.py scripts/verify_windows_uia.py
 include scripts/verify_windows_native.py
 include scripts/verify_linux_atspi.py

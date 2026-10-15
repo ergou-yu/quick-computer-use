@@ -1,4 +1,4 @@
-# QCU API — 1.9.2
+# QCU API — 1.11.0
 
 ## Target and observation
 
@@ -185,5 +185,6 @@ UIA worker timeout blocks new work in that worker until restart/re-observation.
 5. Migrate Apple Events actions to newly observed AX controls. Apple Events is
    an explicit read-only legacy observer; pid/window scoping is unsupported.
 6. Query platform/target capabilities. Windows UIA and Linux AT-SPI2 expose
-   target-specific capabilities; Linux native capture/input requires X11.
+   target-specific capabilities; Linux native capture/input requires X11 or
+   GNOME 46 Wayland with the explicitly enabled QCU bridge extension.
    HarmonyOS is an explicit unimplemented registration.

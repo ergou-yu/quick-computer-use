@@ -1,17 +1,19 @@
 # QCU — Quick Computer Use
 
-**1.10.0.** QCU controls an explicitly selected browser page or
+**1.11.0.** QCU controls an explicitly selected browser page or
 desktop window with accessibility references. This revision binds references to
 a backend lifetime, target and observation; separates dispatch from verified
 results; and supports Windows UI Automation. Real Windows 10 native and CLI
 fixtures are verified; persistent DOM/CDP, compact observations, cached queries
 and bounded batches retain their fast paths.
 
-Linux now provides an AT-SPI2 semantic backend and an optional X11 screenshot/
-XTEST input fallback. See [Linux setup and limits](references/linux.md).
-The Ubuntu GTK/Xvfb workflow passed 771 regression tests and a separate
-25-command live fixture; virtual desktop coverage is distinct from physical
-machine and Wayland compositor validation.
+Linux provides an AT-SPI2 semantic backend, an optional X11 screenshot/XTEST
+fallback and a GNOME 46 Wayland bridge for native screenshots and mouse/keyboard
+input. The GNOME extension is bundled and must be explicitly installed/enabled.
+Ordinary semantic actions, DOM/CDP, cached/compact reads and batches retain their
+fast paths. See [Linux setup and limits](references/linux.md) and
+[test evidence](TEST-REPORT.md); virtual desktop tests are distinct from physical
+machine validation.
 
 ## Install
 
@@ -67,7 +69,7 @@ Preserve the selected target. Tests must use an independent `QCU_HOME`.
 |---|---|---|
 | macOS | `desktop_ax` | AX controls/actions, bounded window capture and safety checks |
 | Windows | `desktop_uia` | Semantic patterns; native HWND PNG screenshots and guarded mouse/keyboard message fallback; real WinForms verification |
-| Linux | `desktop_linux` | AT-SPI2 semantic controls; optional bound-window X11 capture/XTEST input; Wayland semantics only |
+| Linux | `desktop_linux` | AT-SPI2 semantic controls; bound-window X11 capture/XTEST or GNOME 46 Wayland native bridge |
 | HarmonyOS | `desktop_harmony` | Explicitly not implemented; registration extension point |
 
 Apple Events is an explicit **read-only legacy observer** in this preview; its

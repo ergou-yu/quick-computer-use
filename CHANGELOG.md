@@ -3,6 +3,19 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-10-15
+
+- Add an explicitly enabled GNOME 46 Wayland extension for bound-window native
+  PNG capture and Mutter virtual mouse/keyboard input, with a resident D-Bus
+  connection, process lifetime/window identity checks and no XWayland failover.
+- Translate live AT-SPI WINDOW ref bounds through Mutter client coordinates;
+  return screenshot pixel size, logical origin and scale for coordinate input.
+- Gate native input on focus, visible workspace, Shell modals, held modifiers/
+  buttons and surface ownership. Release only attempted presses on partial
+  failures; uncertain requests never replay. Native modules stay lazy.
+- Bundle an install helper and add a real headless GNOME/GTK integration
+  workflow alongside X11 and existing web/Windows regression coverage.
+
 ## [1.10.0] — 2026-10-15
 
 - Implement Linux AT-SPI2 observation and semantic actions on a resident worker,
