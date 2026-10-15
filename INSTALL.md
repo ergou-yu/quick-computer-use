@@ -1,4 +1,4 @@
-# Install QCU 1.10.0
+# Install QCU 1.11.0
 
 Python 3.11 or newer. Install into the environment that runs `qcu`; a different
 Python may have different dependencies and macOS permission identity.
@@ -11,6 +11,11 @@ Python may have different dependencies and macOS permission identity.
 - Linux: install system GI/AT-SPI, then `python3 -m venv --system-site-packages .venv`
   and `.venv/bin/python -m pip install -e '.[linux,dev]'`.
   See [Linux setup](references/linux.md) for the distribution packages and session requirements.
+
+For GNOME 46/50 Wayland native fallback, run `python -m qcu.gnome_bridge install`
+in that Linux environment, then explicitly enable `qcu@quick-computer-use`
+with `gnome-extensions enable`. A first install may need a logout/login for
+GNOME discovery. AT-SPI semantic actions do not require this extension.
 
 For an isolated Windows install from this directory:
 
@@ -31,7 +36,7 @@ use `$json | & .\scripts\qcu.ps1 act -` (or `batch -`) to preserve JSON quoting.
 ## Packaged wheel
 
 ```bash
-python -m pip install 'qcu-1.10.0-py3-none-any.whl[macos]'
+python -m pip install 'qcu-1.11.0-py3-none-any.whl[macos]'
 ```
 
 On Windows replace `[macos]` with `[windows]`, on Linux with `[linux]`; omit extras for web. Chromium is

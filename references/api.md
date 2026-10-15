@@ -1,4 +1,4 @@
-# QCU API — 1.9.2
+# QCU API — 1.11.0
 
 ## Target and observation
 
@@ -8,13 +8,19 @@
 Each Element has an opaque `ref`, normalized `role`, optional `name`/`value`,
 `enabled`, `focused`, `bounds`, `backend_id`, and backend `properties`.
 Geometry uses web CSS pixels, macOS screen points, or Windows UIA screen pixels;
-never transfer coordinates between these spaces.
+Linux AT-SPI bounds use provider SCREEN coordinates, which are not reliable
+global coordinates on Wayland. Native GNOME refs translate explicit WINDOW
+bounds through Mutter. Native screenshot metadata declares X11 screen pixels
+or Wayland logical coordinates and the pixel/logical scale. Never transfer
+coordinates between these spaces.
 
 `routing_meta.target` identifies the observed scope:
 
 - Web: browser port, CDP tab identity and page lifetime, URL/title.
 - AX: PID/app and bound window identity/title; native handles remain in memory.
 - UIA: PID/process creation time/image, HWND, runtime identity and session ID.
+- AT-SPI: PID/process start/executable, unique bus/path window identity and
+  session ID. Native X11/Mutter identities additionally pin the same window.
 
 `routing_meta.ref_scope` reports backend, lifecycle, target and observation
 generation. Public refs extend the original web observation generation with
@@ -185,5 +191,6 @@ UIA worker timeout blocks new work in that worker until restart/re-observation.
 5. Migrate Apple Events actions to newly observed AX controls. Apple Events is
    an explicit read-only legacy observer; pid/window scoping is unsupported.
 6. Query platform/target capabilities. Windows UIA and Linux AT-SPI2 expose
-   target-specific capabilities; Linux native capture/input requires X11.
+   target-specific capabilities; Linux native capture/input requires X11 or
+   GNOME 46/50 Wayland with the explicitly enabled QCU bridge extension.
    HarmonyOS is an explicit unimplemented registration.

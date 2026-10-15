@@ -1,9 +1,9 @@
-# Linux AT-SPI2 and X11 — 1.10.0
+# Linux AT-SPI2, X11 and GNOME Wayland — 1.11.0
 
 Linux desktop uses `desktop_linux`. Normal reads and ref actions go directly
 through AT-SPI2 on one persistent worker. Web DOM/CDP, compact observations,
 cached find/inspect, condition polling and bounded batches retain their paths.
-Native X11 libraries are loaded only for an explicit screenshot/input request.
+Native X11/GNOME bridge libraries load only for an explicit native request.
 
 ## Install and select a target
 
@@ -92,19 +92,68 @@ Drag endpoints can also use `ref_from`/`ref_to` with live bounds. A ref click's
 explicit `fallback:"native"` is honored only if a semantic interface/action is
 unsupported before dispatch; a late AT-SPI error cannot trigger fallback.
 
-## Wayland
+## GNOME 46/50 Wayland (Ubuntu 24.04 and 26.04)
 
-Exposed AT-SPI controls remain usable for semantic reads/actions. Native
-screenshot/input returns `wayland_native_unsupported`, even when XWayland has
-a DISPLAY. A portal/compositor capture/remote-desktop adapter and its consent
-flow are not implemented. QCU does not change compositor permissions or fall
-back to another user's session. Browser DOM/CDP is independent of XTEST.
+The bundled **QCU Native Wayland Bridge** extension is optional. Installing and
+enabling it grants native capture/input access to the logged-in GNOME session,
+using GNOME's extension model. QCU does not auto-enable it or modify portal policy.
+Other GNOME major versions and KDE/wlroots are not advertised as supported.
+
+```bash
+.venv/bin/python -m qcu.gnome_bridge install
+gnome-extensions enable qcu@quick-computer-use
+```
+
+For a first install GNOME may need a logout/login to discover the extension;
+then run the enable command. `install --enable` can enable an already discovered
+extension. Both wheel and source packages include the extension. Disable with
+`gnome-extensions disable qcu@quick-computer-use`. Stop the QCU session and
+observe again after changing the extension or restarting Shell.
+
+On the first explicit native request QCU lazily connects to the desktop user's
+GNOME Shell D-Bus connection. It matches exactly one Mutter window by the bound
+AT-SPI PID/title, verifies `/proc` start time/executable, and retains its stable
+sequence plus a caller-bound token. The unique bus owner and extension instance
+are pinned; a restart, disabled extension, reused PID or removed window fails.
+The connection and virtual input devices are reused. No per-event subprocesses,
+OCR, clipboard edits, mandatory screenshots or fixed action delays are added.
+
+Screenshot uses `Shell.Screenshot` on the focused bound window into memory,
+then writes the returned PNG in the QCU process. It returns buffer `bounds`
+(including client-side transparent shadows), the visible `frame_bounds`,
+`coordinate_origin`, `coordinate_scale`, `pixel_size`, `wayland_window_id` and
+`coordinate_space:"wayland_logical"`. Convert an image pixel `(u,v)` to pointer
+coordinates as `(origin.x+u/scale, origin.y+v/scale)`. Never reuse an origin after
+window movement. Mixed-DPI/multi-monitor combinations require target validation.
+
+Explicit native click/double/right click, hover, wheel, drag and `press_key`
+use Mutter `VirtualInputDevice`. Named keys/shortcuts are supported; use AT-SPI
+`fill`/`type` for Unicode. Input requires the bound window on the current visible
+workspace with keyboard focus, no Shell overview/lock/modal, no held modifiers
+or mouse buttons, and owned pointer points checked through the compositor scene.
+It never activates a window. These checks repeat across event delivery; partial
+failures release only attempted presses and return unknown without retry.
+Mutter pointer barriers can constrain movement, including GNOME 50 hot corners
+when the headless pointer starts at an edge. QCU stops before button dispatch
+if the pointer does not arrive; it does not disable barriers or replay movement.
+
+Wayland clients cannot reliably report global screen positions. Native **refs**
+read explicit AT-SPI `CoordType.WINDOW` bounds and translate through Mutter's
+client rectangle. Observation `bounds` are AT-SPI provider coordinates and must
+not be copied directly into coordinate actions on Wayland; use refs or the
+native screenshot's coordinate metadata. `screenshot_fallback` borrows the same
+identity and native adapter. Semantic refs and DOM/CDP remain independent.
+
+If the extension is missing/disabled, native requests return
+`wayland_bridge_unavailable`; AT-SPI semantics remain available. QCU never
+silently redirects a Wayland request through XWayland, ydotool/uinput, another
+user's session or an unconsented portal connection.
 
 ## Verification
 
-The portable tests inject AT-SPI/X11 objects and do not prove interoperability.
+Portable tests inject AT-SPI/X11/GNOME objects and do not prove interoperability.
 `scripts/verify_linux_atspi.py` creates a disposable GTK3 window plus isolated
-QCU_HOME in an existing Linux DBus/X11 session. It checks semantic operations,
+QCU_HOME in an existing Linux DBus/X11 or disposable GNOME Wayland session. It checks semantic operations,
 Unicode, batch/readback, native capture/input, stale refs, focus/occlusion,
 movement and subsequent semantic fill. Install `gir1.2-gtk-3.0` for the fixture.
 
@@ -113,11 +162,22 @@ movement and subsequent semantic fill. Install `gir1.2-gtk-3.0` for the fixture.
 .venv/bin/python scripts/verify_linux_atspi.py --output linux-live.json
 ```
 
-The repository workflow runs this on Ubuntu with DBus, Xvfb and Openbox, and
-uploads the report, logs, captures and packages. This is a real Linux virtual
-desktop fixture, not physical-machine or Wayland compositor validation.
+The Linux workflow runs DBus/Xvfb/Openbox. The separate Wayland workflow starts
+an actual headless GNOME Shell/Mutter with native Wayland GTK, no DISPLAY or
+XWayland, and enables the bundled bridge plus an **isolated CI-only controller**
+for moving/focusing owned fixture windows and creating an occluding Shell actor.
+The controller is not installed by QCU or included in wheels. Reports, PNGs and
+compositor logs are saved. These virtual desktop tests are not physical-machine
+validation. Reproduce the disposable environment with `.github/workflows/wayland.yml`;
+do not enable the test controller in a personal desktop session.
+The fixture disables animations and hot corners only in its temporary settings.
+With GNOME 50 hot corners enabled, an edge-start motion was constrained and
+returned unknown without a click. The production bridge leaves these settings alone.
 
 API references: [GNOME AT-SPI2](https://docs.gtk.org/atspi2/),
 [EditableText](https://docs.gtk.org/atspi2/iface.EditableText.html),
 [AT-SPI timeouts](https://docs.gtk.org/atspi2/func.set_timeout.html),
-[python-xlib](https://github.com/python-xlib/python-xlib).
+[python-xlib](https://github.com/python-xlib/python-xlib),
+[GNOME extension model](https://gjs.guide/extensions/overview/architecture.html),
+[GNOME screenshot implementation](https://github.com/GNOME/gnome-shell/blob/gnome-46/src/shell-screenshot.c),
+[Mutter virtual input API](https://github.com/GNOME/mutter/blob/gnome-46/clutter/clutter/clutter-virtual-input-device.h).

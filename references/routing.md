@@ -1,4 +1,4 @@
-# Routing and target binding — 1.10.0
+# Routing and target binding — 1.11.0
 
 The router remains a small priority rule chain. `qcu/router/rules.py` and
 `qcu/platforms.py` are the source of truth; decisions are recorded in telemetry.
@@ -62,5 +62,6 @@ Register a platform name/backend with `register_desktop_backend`, register the
 Layer constructor with `runtime.register`, and implement the common contracts
 and conservative capabilities. Keep platform imports lazy. HarmonyOS
 currently returns explicit unsupported observations/actions. Linux uses AT-SPI2
-and explicitly refuses unsupported Wayland native actions. The interface does
+with optional X11 or GNOME Wayland native fallback. Missing GNOME bridges and
+unsupported Wayland compositors fail explicitly. The interface does
 not imply that a provider, OCR model, explorer graph or vision service exists.

@@ -1,0 +1,117 @@
+name: GNOME Wayland native
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wayland-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gnome:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test bridge failure boundaries
+        run: node tests/fixtures/test_gnome_bridge.cjs
+      - name: Install GNOME and Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[linux,dev]' build
+      - name: Run GTK and native bridge in a real GNOME Wayland compositor
+        run: |
+          mkdir -p wayland-evidence
+          dbus-run-session -- bash scripts/verify_gnome_session.sh
+      - name: Print compositor and fixture diagnostics
+        if: always()
+        run: |
+          tail -180 wayland-evidence/gnome.log || true
+          .venv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('wayland-evidence/linux-live.json')
+          if p.exists():
+              r=json.loads(p.read_text())
+              print('Fixture error:',r.get('error'))
+              for x in r.get('records',[]):
+                  print(x.get('command'),x.get('result',{}))
+          for p in Path('wayland-evidence').glob('*.fixture.log'):
+              print(p.read_text()[-6000:])
+          PY
+      - name: Mirror owned fixture evidence
+        if: always()
+        run: |
+          .venv/bin/python - <<'PY'
+          import base64
+          from pathlib import Path
+          for name in ('linux-live.json','linux-before.png','linux-moved.png'):
+              p=Path('wayland-evidence')/name
+              if p.exists():
+                  b=p.read_bytes()
+                  for i,start in enumerate(range(0,len(b),9000)):
+                      print('QCU_EVIDENCE',name,i,base64.b64encode(b[start:start+9000]).decode())
+          PY
+      - name: Save evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayland-test-evidence
+          path: wayland-evidence/
+  gnome-modern:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['24.04', '26.04']
+    container: ubuntu:${{ matrix.ubuntu }}
+    timeout-minutes: 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install current Ubuntu LTS GNOME
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
+          mkdir -p /run/dbus
+          dbus-daemon --system --fork
+          # This disposable container has no systemd/login session. Let GNOME
+          # use its built-in non-systemd login manager for the headless fixture.
+          if test -d /run/systemd/seats; then rmdir /run/systemd/seats; fi
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[linux,dev]'
+          useradd --create-home --shell /bin/bash qcu-ci
+          chown -R qcu-ci:qcu-ci "$GITHUB_WORKSPACE"
+      - name: Run current LTS Wayland fixture as a desktop user
+        run: runuser -u qcu-ci -- dbus-run-session -- bash scripts/verify_gnome_session.sh
+      - name: Print compositor diagnostics and mirror owned evidence
+        if: always()
+        run: |
+          tail -100 wayland-evidence/gnome.log || true
+          .venv/bin/python - <<'PY'
+          import base64,json
+          from pathlib import Path
+          p=Path('wayland-evidence/linux-live.json')
+          if p.exists():
+              r=json.loads(p.read_text())
+              print('Fixture error:',r.get('error'))
+              for x in r.get('records',[]):
+                  result=x.get('result',{})
+                  print(x.get('command'),result.get('message'),result.get('data',{}))
+          for name in ('linux-live.json','linux-before.png','linux-moved.png'):
+              p=Path('wayland-evidence')/name
+              if p.exists():
+                  b=p.read_bytes()
+                  for i,start in enumerate(range(0,len(b),9000)):
+                      print('QCU_EVIDENCE',name,i,base64.b64encode(b[start:start+9000]).decode())
+          PY
+      - name: Save current LTS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayland-container-${{ matrix.ubuntu }}-test-evidence
+          path: wayland-evidence/

@@ -49,9 +49,18 @@ class AtspiAPI:
     @property
     def native(self):
         if self._native is None:
-            from qcu.layers._linux_x11 import X11Native
-            self._native = X11Native()
+            if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+                from qcu.layers._linux_wayland import GnomeNative
+                self._native = GnomeNative()
+            else:
+                from qcu.layers._linux_x11 import X11Native
+                self._native = X11Native()
         return self._native
+
+    def relative_bounds(self, obj):
+        self.refresh(obj)
+        value = obj.get_component_iface().get_extents(self.a.CoordType.WINDOW)
+        return Rect(value.x, value.y, value.width, value.height)
 
     def refresh(self, obj):
         context = self.glib.MainContext.default()
@@ -399,12 +408,16 @@ class DesktopLinuxLayer:
                 self._bind_native(root)
                 data = self._api.native.capture(self.current_target, path)
                 self._validate_window()
-                return LayerResult(True, self.name, "Bound X11 window captured", data,
+                return LayerResult(True, self.name, "Bound native window captured", data,
                                    dispatch_state="not_sent", outcome="verified")
+            self._bind_native(root)
+            def point(obj, info):
+                mapper = getattr(self._api.native, "ref_point", None)
+                return mapper(self._api, obj, self.current_target) if mapper else (info["bounds"].cx, info["bounds"].cy)
             if obj and kind != "press_key":
                 if not info["bounds"]:
                     raise LinuxError("geometry_unavailable", "Control has no live bounds")
-                p.update(x=info["bounds"].cx, y=info["bounds"].cy)
+                p["x"], p["y"] = point(obj, info)
             if obj and kind == "press_key" and not info["focused"]:
                 raise LinuxError("focus_mismatch", "Requested ref is not focused")
             if kind == "drag":
@@ -412,15 +425,15 @@ class DesktopLinuxLayer:
                     if p.get(ref_key):
                         if xkey in p or ykey in p or container in p or (ref_key=="ref_from" and ("x1" in p or "y1" in p)):
                             raise LinuxError("ref_coordinate_conflict", "Drag endpoint mixes a ref and coordinates")
-                        endpoint=self._api.info(self._get(p[ref_key]))
+                        endpoint_obj=self._get(p[ref_key])
+                        endpoint=self._api.info(endpoint_obj)
                         if not endpoint["enabled"] or endpoint["offscreen"] or not endpoint["bounds"]:
                             raise LinuxError("control_unavailable", "Drag endpoint is disabled, offscreen or lacks bounds")
-                        p[xkey],p[ykey]=endpoint["bounds"].cx,endpoint["bounds"].cy
-            self._bind_native(root)
+                        p[xkey],p[ykey]=point(endpoint_obj, endpoint)
             data = self._api.native.dispatch(self.current_target, kind, p)
         else:
             if kind not in _SEMANTIC or obj is None:
-                raise LinuxError("unsupported", "Use a semantic ref or an explicit X11 native action")
+                raise LinuxError("unsupported", "Use a semantic ref or an explicit native action")
             try:
                 send = self._api.prepare(obj, kind, p)
             except LinuxError as exc:

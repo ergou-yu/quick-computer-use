@@ -1,5 +1,70 @@
 # QCU 测试报告（Test Report）
 
+## 1.11.0 GNOME Wayland 验证 — 2026-10-15
+
+本轮在实际 GNOME Shell/Mutter Wayland 合成器中运行 GTK3、AT-SPI2 和
+QCU 常驻 daemon；这属于 **headless 虚拟桌面集成测试，不是物理 Linux 真机测试**。
+测试使用独立 DBus、QCU_HOME、临时扩展目录和一次性窗口，`DISPLAY` 未设置，
+GTK 明确使用 Wayland，合成器禁用 XWayland。
+
+| 验证项 | 结果 |
+|---|---|
+| Ubuntu 24.04 / GNOME 46.2 / Python 3.12.3 | **29 条记录命令，完整流程通过** |
+| Ubuntu 26.04 / GNOME 50.1 / Python 3.14.4 | **29 条记录命令，完整流程通过** |
+| Ubuntu 24.04 GNOME 容器对照 | **29 条记录命令，完整流程通过** |
+| X11 / GTK / Xvfb / Openbox 回归 | **25 条记录命令，完整流程通过** |
+| Linux 完整回归 | **783 passed、10 skipped，27.21 秒** |
+| Windows 完整回归 | **792 passed、1 skipped，62.35 秒** |
+| GNOME JavaScript 故障边界 | **12 项通过，mock host，单独计数** |
+
+29 条命令包含语义中文/emoji 填充、勾选、Selection、batch、旧 ref 拒绝、
+目标窗口 PNG、原生点击/F6、Unicode 追加、悬停/右键/双击/滚轮/拖拽、
+screenshot fallback、Shell 表面遮挡和非前台拒绝、窗口移动后截图原点与
+原生 ref 点击、扩展停用拒绝、重新启用后的旧实例拒绝，以及扩展失效时
+继续使用语义填充。命令数包含预期拒绝和清理，不含只读就绪轮询。
+Ctrl+a/End 未单独指定后置条件，记录为发送且结果未知，不计作独立结果验证。
+
+可核验记录：[GNOME 46/50 三环境完整流程](https://github.com/ergou-yu/quick-computer-use/actions/runs/38678610932)、
+[GNOME 46 JSON、PNG、日志](https://github.com/ergou-yu/quick-computer-use/actions/runs/38678610932/artifacts/11947242250)、
+[GNOME 50 JSON、PNG、日志](https://github.com/ergou-yu/quick-computer-use/actions/runs/38678610932/artifacts/11947146397)、
+[Linux/X11 回归与打包](https://github.com/ergou-yu/quick-computer-use/actions/runs/38678610973)。
+
+GNOME 46 本轮单次后端耗时：语义 fill 28.06 ms、toggle 8.57 ms、select
+6.24 ms；batch 两次填充、一次点击与观察共 66.78 ms；原生点击含读回
+35.89 ms、F6 32.88 ms、拖拽 24.83 ms，截图 41.20 / 24.62 ms。
+GNOME 50：语义 fill 22.74 ms，batch 50.09 ms，原生点击含读回 58.74 ms、
+拖拽 19.86 ms，截图 39.11 / 20.07 ms。
+这些是该虚拟机上的单次样本，不含模型推理和 CLI 进程成本，不能据此
+宣称与常规 computer use 相比有固定倍数的优势。
+
+QCU 使用报告：实际层为 `desktop_linux`、`screenshot_fallback`，并运行
+DOM/CDP、缓存与 batch 回归。新增原生通道为常驻 GNOME D-Bus 和 Mutter
+VirtualInputDevice；普通语义操作仍不截图、不 OCR、不加载原生适配器、
+不启动逐事件子进程，也没有新增固定动作等待。PNG 仅用于显式截图请求；
+按键/点击是否成功仍以 AT-SPI 后置条件读回为准。
+
+本轮修复 Clutter 默认键盘焦点返回 stage 的判断、GTK 客户端阴影导致的
+buffer/frame 尺寸差异、非交互 Shell 层被误判为鼠标遮挡的问题。
+测试环境提前建立虚拟键鼠 seat，以模拟桌面已有输入设备；测试控制器仅
+移动/聚焦自有窗口并创建遮挡表面，不替代 QCU 的原生输入或结果读回。
+该控制器不安装到用户桌面、不包含在 wheel 中。
+GNOME 50 兼容了 Wayland-only 版本移除旧探测函数的变化，并使用新的
+pointer sprite 坐标。原生通道首次绑定等待虚拟设备注册完成，后续重复使用。
+
+已知限制：GNOME 50 的 headless 指针从屏幕边缘出发时，开启热角会遇到
+Mutter 指针屏障，运动未到达目标，QCU 返回 unknown 并停止在点击之前。
+完整成功流程在临时设置中关闭了热角和动画；生产代码不修改这两项设置，
+不绕过屏障、不自动重发。本项属于实际测到的桌面输入约束，不能宣称
+GNOME 50 所有默认屏障/起点组合均已通过。
+
+限制：原生后备按所支持的 GNOME 主版本启用，KDE/wlroots 原生适配仍未
+实现；混合 DPI、多显示器、特殊键盘布局和受保护/自绘控件仍需逐目标验证。
+首次使用需显式安装并启用随包 GNOME 扩展；停用扩展立即失去原生通道，
+AT-SPI 语义操作继续可用。未修改用户 portal、系统权限或剪贴板。
+安装与复跑方法见 [Linux](references/linux.md)。
+
+---
+
 ## 1.10.0 Linux 验证 — 2026-10-15
 
 环境：Ubuntu 24.04、Python 3.12.3、系统 GI/AT-SPI2/GTK3、Xvfb :99、
