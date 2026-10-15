@@ -1,4 +1,4 @@
-include SKILL.md CHANGELOG.md INSTALL.md
+include SKILL.md CHANGELOG.md INSTALL.md TEST-REPORT.md
 recursive-include references *.md
 recursive-include examples *.py *.swift
 recursive-include tests *.py

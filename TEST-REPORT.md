@@ -1,5 +1,51 @@
 # QCU 测试报告（Test Report）
 
+## 1.10.0 Linux 验证 — 2026-10-15
+
+环境：Ubuntu 24.04、Python 3.12.3、系统 GI/AT-SPI2/GTK3、Xvfb :99、
+Openbox、python-xlib 0.33。所有操作使用独立 QCU_HOME 和一次性 GTK 窗口。
+这是实际 Linux 虚拟桌面测试，**不是物理机、完整 GNOME/KDE 或 Wayland 真机验证**。
+
+- **Linux 完整回归：771 passed、10 skipped，27.48 秒，无失败。**
+  跳过项按平台/显式真机开关区分；GTK 集成另外单独运行。
+- **GTK/AT-SPI/X11 完整流程：25 条记录命令，主流程通过。**
+  包含语义填充、中文/emoji、勾选、Selection、batch、旧 ref 拒绝、
+  X11 PNG、原生点击/F6、Unicode 追加、悬停/右键/双击/滚轮/拖动、
+  screenshot fallback、遮挡/非前台拒绝、移动后的截图原点及后续语义填充。
+  命令数包括拒绝和清理，不含只读就绪轮询；未单独指定后置条件的
+  Ctrl+a/End 只记录发送，不计作独立业务结果验证通过。
+- wheel/sdist 在 Linux 构建通过；源码 Bash 入口保留 Unix 可执行权限。
+- **Windows 最终全量回归：780 passed、1 skipped，60.35 秒，无失败。**
+  唯一跳过为 Linux 真机用例；Windows/macOS 的原后端未替换。
+
+可核验运行：[Ubuntu CI 38669922456](https://github.com/ergou-yu/quick-computer-use/actions/runs/38669922456)，
+[原始 JSON、截图、日志与构建包](https://github.com/ergou-yu/quick-computer-use/actions/runs/38669922456/artifacts/11943550809)。
+
+本轮单次后端耗时（不是多轮中位数，CLI 总耗时另计）：观察 22.58 ms、
+语义 fill 10.62 ms、toggle 14.86 ms、select 6.97 ms；
+batch 两次填充、一次提交及观察共 55.81 ms（完整 CLI 159.87 ms）。
+原生点击含结果读回 33.10 ms，拖动含结果读回 107.15 ms；
+两次截图 55.86/25.20 ms。这里只是该虚拟机的小样本，不包含模型推理，
+不据此宣称相对其他 computer use 的固定倍数。
+
+QCU 使用报告：实际层为 `desktop_linux`、`screenshot_fallback`，并运行网页
+DOM/CDP 回归。结构化 ref、常驻 worker、缓存/compact 与有界 batch 保留；
+普通语义操作不加载 X11、不截图、不插入固定延迟。发现并修复 GI 的
+Accessible/Text 同名方法冲突、ATK 插入长度必须按 UTF-8 字节计算的问题。
+GTK ListBox 在此环境不暴露 Selection，因此 fixture 使用实际暴露 Selection
+的 IconView；生产后端对缺少该接口的控件明确拒绝。
+
+Ubuntu runner 的 Chromium 启动诊断确认 `No usable sandbox`，随后只为
+runner 的准确测试浏览器路径加载 AppArmor userns profile；沙箱探测及网页
+回归均通过。QCU 不自动关闭 Chromium 沙箱，也不修改用户主机策略。
+
+限制：Wayland 原生截图/输入尚无 portal/compositor 适配器；可暴露的 AT-SPI
+语义操作仍可使用。混合 DPI/多显示器/键盘布局、受保护或自绘控件均需
+逐目标验证；本次没有声称物理 Linux 桌面或所有发行版互操作完成。
+安装、复跑与接口边界见 [Linux](references/linux.md)。
+
+---
+
 ## 1.9.2 Windows 验证 — 2026-10-15
 
 环境：Windows 10 build 19045、Python 3.12、uiautomation 2.0.29、

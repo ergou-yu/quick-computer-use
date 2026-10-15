@@ -9,6 +9,9 @@ and bounded batches retain their fast paths.
 
 Linux now provides an AT-SPI2 semantic backend and an optional X11 screenshot/
 XTEST input fallback. See [Linux setup and limits](references/linux.md).
+The Ubuntu GTK/Xvfb workflow passed 771 regression tests and a separate
+25-command live fixture; virtual desktop coverage is distinct from physical
+machine and Wayland compositor validation.
 
 ## Install
 

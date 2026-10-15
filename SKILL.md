@@ -18,6 +18,8 @@ reference lifetime, backend capabilities, dispatch and requested-result evidence
 A successful API call or changing screen does not alone prove task completion.
 Windows UIA and the CLI/daemon pipeline were verified on a real Windows 10
 interactive desktop (2026-10-14). Each new target still requires a live probe.
+Linux AT-SPI/X11 was verified in Ubuntu 24.04 GTK/Xvfb CI (2026-10-15),
+distinct from physical-machine and Wayland compositor verification.
 
 ## Linux desktop
 
