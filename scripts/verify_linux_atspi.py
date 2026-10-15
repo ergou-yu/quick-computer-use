@@ -56,6 +56,12 @@ def verify(output):
         def observed(): return call("observe","--compact")
         def refs(obs): return {(e.get("name") or e.get("value")):e["ref"] for e in obs["elements"] if e.get("name") or e.get("value")}
         def command(op,**data):
+            if wayland and op=="overlay":
+                # A GTK Wayland popup grabs focus. Use only the owned Shell
+                # actor here so the test isolates pointer occlusion from focus.
+                control.call_sync("Request",GLib.Variant("(s)",(json.dumps(dict(op=op,title=title,pid=fixture.pid,**data)),)),0,3000,None)
+                time.sleep(.15)
+                return
             staged=commands.with_suffix(".tmp")
             staged.write_text(json.dumps(dict(op=op,**data)))
             staged.replace(commands)

@@ -75,6 +75,9 @@ jobs:
           apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
           mkdir -p /run/dbus
           dbus-daemon --system --fork
+          # This disposable container has no systemd/login session. Let GNOME
+          # use its built-in non-systemd login manager for the headless fixture.
+          if test -d /run/systemd/seats; then rmdir /run/systemd/seats; fi
           python3 -m venv --system-site-packages .venv
           .venv/bin/python -m pip install -e '.[linux,dev]'
           useradd --create-home --shell /bin/bash qcu-ci
