@@ -153,6 +153,8 @@ export default class QCUBridge extends Extension {
     _point(w, g, x, y) {
         if (!finite(x) || !finite(y))
             fail('invalid_coordinates', 'Coordinates must be finite numbers');
+        x = Math.floor(x);
+        y = Math.floor(y);
         if (x < g.x || y < g.y || x >= g.x+g.width || y >= g.y+g.height)
             fail('outside_target', 'Pointer is outside the bound window');
         let actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
@@ -273,10 +275,18 @@ export default class QCUBridge extends Extension {
         const mask = global.get_pointer()[2];
         const busy = Clutter.ModifierType.SHIFT_MASK | Clutter.ModifierType.CONTROL_MASK |
             Clutter.ModifierType.MOD1_MASK | Clutter.ModifierType.SUPER_MASK |
-            Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.BUTTON2_MASK | Clutter.ModifierType.BUTTON3_MASK;
+            Clutter.ModifierType.MOD4_MASK | Clutter.ModifierType.MOD5_MASK |
+            Clutter.ModifierType.META_MASK | Clutter.ModifierType.HYPER_MASK |
+            Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.BUTTON2_MASK |
+            Clutter.ModifierType.BUTTON3_MASK | Clutter.ModifierType.BUTTON4_MASK | Clutter.ModifierType.BUTTON5_MASK;
         if (mask & busy)
             fail('input_busy', 'A pointer button or modifier is already held');
         const seat = global.backend?.get_default_seat?.() ?? Clutter.get_default_backend().get_default_seat();
+        // Select once BEFORE dispatch. GNOME 50 uses the compositor's integer
+        // seat warp API; there is no retry or alternate send after a failure.
+        const warp = Number.parseInt(Config.PACKAGE_VERSION) === 50;
+        if (warp && typeof seat.warp_pointer !== 'function')
+            fail('unsupported', 'The compositor does not expose seat pointer motion');
         if (keys.length)
             this._keyboard ??= seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         else
@@ -309,7 +319,7 @@ export default class QCUBridge extends Extension {
             for (let i = 0; i < points.length; i++) {
                 const [x, y] = points[i];
                 this._point(w, g, x, y);
-                await send(t => this._pointer.notify_absolute_motion(t, x, y));
+                await send(t => warp ? seat.warp_pointer(x, y) : this._pointer.notify_absolute_motion(t, x, y));
                 // Delivery can be asynchronous; wait only on the observed pointer.
                 const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
                 while (Math.abs(global.get_pointer()[0]-x) > 1 || Math.abs(global.get_pointer()[1]-y) > 1) {
@@ -341,7 +351,7 @@ export default class QCUBridge extends Extension {
             for (const direction of scroll)
                 await send(t => this._pointer.notify_discrete_scroll(t, direction, Clutter.ScrollSource.WHEEL));
             const [x, y] = global.get_pointer();
-            return {events, pointer_position: {x, y}};
+            return {events, pointer_position: {x, y}, pointer_motion: warp ? 'seat_warp' : 'virtual_absolute'};
         } catch (e) {
             e.dispatched = sent;
             throw e;

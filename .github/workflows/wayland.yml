@@ -72,7 +72,7 @@ jobs:
       - name: Install current Ubuntu LTS GNOME
         run: |
           apt-get update
-          apt-get install -y python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
+          apt-get install -y --no-install-recommends python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
           mkdir -p /run/dbus
           dbus-daemon --system --fork
           # This disposable container has no systemd/login session. Let GNOME

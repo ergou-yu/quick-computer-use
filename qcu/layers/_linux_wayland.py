@@ -120,10 +120,10 @@ class GnomeNative:
                                   "key", "x", "y", "x1", "y1", "x2", "y2", "from", "to", "steps", "dx", "dy"}})
         if type(value.get("events")) is not int or value["events"] < 1:
             raise LinuxError("outcome_unknown", "Native reply did not confirm an event count", dispatched=True)
-        return dict(target=dict(target), method="GNOME.Mutter.VirtualInputDevice",
+        return dict(target=dict(target), method="GNOME.Mutter.NativeInput",
                     wayland_window_id=binding["window_id"], retry_safe=False, input_mode="native",
                     coordinate_space="wayland_logical", events=value["events"],
-                    pointer_position=value.get("pointer_position"))
+                    pointer_position=value.get("pointer_position"), pointer_motion=value.get("pointer_motion"))
 
     def close(self):
         # The shared session bus belongs to GI/AT-SPI; do not close it.

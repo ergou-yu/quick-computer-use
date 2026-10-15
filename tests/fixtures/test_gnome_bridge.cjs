@@ -17,10 +17,11 @@ const mouse = {
 const Clutter = {KEY_Control_L: 65507, KEY_a: 97, KEY_F6: 65475,
     KeyState: {PRESSED: 1, RELEASED: 0}, ButtonState: {PRESSED: 1, RELEASED: 0},
     InputDeviceType: {KEYBOARD_DEVICE: 1, POINTER_DEVICE: 2}, PickMode: {ALL: 1},
-    ModifierType: {SHIFT_MASK: 1, CONTROL_MASK: 4, MOD1_MASK: 8, SUPER_MASK: 64,
-        BUTTON1_MASK: 256, BUTTON2_MASK: 512, BUTTON3_MASK: 1024},
+    ModifierType: {SHIFT_MASK: 1, CONTROL_MASK: 4, MOD1_MASK: 8, MOD4_MASK: 64, SUPER_MASK: 67108864,
+        BUTTON1_MASK: 256, BUTTON2_MASK: 512, BUTTON3_MASK: 1024, BUTTON4_MASK: 2048, BUTTON5_MASK: 4096},
     ScrollDirection: {UP: 1, DOWN: 2, LEFT: 3, RIGHT: 4}, ScrollSource: {WHEEL: 1},
-    get_default_backend: () => ({get_default_seat: () => ({create_virtual_device: k => k === 1 ? keyboard : mouse})}),
+    get_default_backend: () => ({get_default_seat: () => ({create_virtual_device: k => k === 1 ? keyboard : mouse,
+        warp_pointer: (x, y) => { events.push(['warp', x, y]); pointer = [x, y, 0]; }})}),
 };
 const globalMock = {get_pointer: () => pointer};
 const main = {sessionMode: {isLocked: false}, overview: {visible: false}, modalCount: 0};
@@ -61,10 +62,12 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     await assert.rejects(input(b, 'press_key', {key: 'F6'}), e => e.dispatched === false);
     assert.equal(events.length, 0);
     checks++;
-    b = bridge();
-    pointer[2] = 4;
-    await assert.rejects(input(b, 'click', {x: 20, y: 20}), e => e.reason === 'input_busy');
-    assert.equal(events.length, 0);
+    for (const mask of [4, 64, 2048]) {
+        b = bridge();
+        pointer[2] = mask;
+        await assert.rejects(input(b, 'click', {x: 20, y: 20}), e => e.reason === 'input_busy');
+        assert.equal(events.length, 0);
+    }
     checks++;
     b = bridge();
     b._point = () => { throw Object.assign(new Error('occluded'), {reason: 'point_occluded'}); };
@@ -100,6 +103,11 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     await new Bridge().RequestAsync([JSON.stringify({op: 'hello'})], {return_value: v => { reply = JSON.parse(v.value[0]); }});
     assert.equal(reply.ok, false); // older GNOME X11 must still be refused
     assert.equal(reply.reason, 'session_mismatch');
+    checks++;
+    b = bridge();
+    const hover = await input(b, 'hover', {x: 20, y: 30});
+    assert.deepEqual(events, [['warp', 20, 30]]);
+    assert.equal(hover.pointer_motion, 'seat_warp');
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
