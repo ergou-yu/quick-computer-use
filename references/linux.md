@@ -30,6 +30,11 @@ for web/CDP. Other distributions need their equivalent GI/AT-SPI packages.
 Applications must expose accessible controls; toolkit or sandbox limitations
 are reported on observation rather than inferred from package availability.
 
+On Ubuntu versions restricting unprivileged user namespaces, bundled Chromium
+may fail with `No usable sandbox`. Follow the [Chromium AppArmor guide](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md)
+for the browser executable. QCU does not silently add `--no-sandbox` or alter
+host policy. The disposable CI runner loads a profile for its exact test binary.
+
 Observe requires an explicit PID, title/app constraint, or a previous bound
 window. Ambiguous windows fail with candidates. `window_id` is the unique
 AT-SPI DBus owner plus object path, not an XID. Refs additionally encode the

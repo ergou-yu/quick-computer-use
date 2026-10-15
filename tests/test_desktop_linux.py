@@ -194,3 +194,24 @@ def test_unbound_target_and_platform_guard():
     if not sys.platform.startswith("linux"):
         assert obs.routing_meta["reason"]=="platform_mismatch"
     layer.close()
+
+
+def test_gi_text_interface_does_not_call_accessible_interface_getter():
+    from types import SimpleNamespace
+    from qcu.layers.desktop_linux import AtspiAPI
+    api=object.__new__(AtspiAPI)
+    state_names=("DEFUNCT","SHOWING","ENABLED","SENSITIVE","FOCUSED","CHECKED","SELECTED","SELECTABLE","EDITABLE")
+    api.a=SimpleNamespace(StateType=SimpleNamespace(**{n:n for n in state_names}),
+                         Text=SimpleNamespace(get_text=lambda obj,start,end:obj.value[start:end]))
+    api.refresh=lambda _:None
+    class GIObject:
+        value="中文 🚀"
+        def get_text(self):
+            pytest.fail("Accessible.get_text is an interface getter, not text content")
+        def get_text_iface(self): return self
+        def get_character_count(self): return len(self.value)
+        def get_state_set(self): return SimpleNamespace(contains=lambda s:s in {"ENABLED","SENSITIVE","EDITABLE"})
+        def get_interfaces(self): return ["Text","EditableText"]
+        def get_role_name(self): return "entry"
+        def get_name(self): return "Name"
+    assert api.info(GIObject())["value"]=="中文 🚀"

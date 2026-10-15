@@ -106,7 +106,9 @@ class AtspiAPI:
         value = None
         if "Text" in interfaces and role != "password text":
             text = obj.get_text_iface()
-            value = text.get_text(0, min(text.get_character_count(), 16384))
+            # Accessible.get_text() is the legacy interface getter and shadows
+            # Text.get_text(start,end) on the same GI object. Name the interface.
+            value = self.a.Text.get_text(text, 0, min(text.get_character_count(), 16384))
         return dict(name=obj.get_name(), raw_role=role, value=value, bounds=bounds,
                     enabled=has("ENABLED") and has("SENSITIVE"), focused=has("FOCUSED"),
                     offscreen=not has("SHOWING"),

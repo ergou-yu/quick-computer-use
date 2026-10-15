@@ -21,6 +21,11 @@ jobs:
           python3 -m venv --system-site-packages .venv
           .venv/bin/python -m pip install -e '.[linux,dev]' build pytest-timeout
           .venv/bin/python -m playwright install --with-deps chromium
+      - name: Allow the test browser's sandbox on this disposable runner
+        run: |
+          chromium=$(.venv/bin/python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()')
+          printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile qcu-ci-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' "$chromium" | sudo tee /etc/apparmor.d/qcu-ci-chromium >/dev/null
+          sudo apparmor_parser -r /etc/apparmor.d/qcu-ci-chromium
       - name: Run real GTK, AT-SPI, X11 fixture
         run: |
           mkdir -p linux-evidence
