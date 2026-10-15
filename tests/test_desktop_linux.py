@@ -249,3 +249,15 @@ def test_late_error_cannot_enter_explicit_fallback(linux):
     api.send_error=True
     result=layer.act(Action("click",dict(ref=refs["Save"],fallback="native")))
     assert result.dispatch_state=="unknown" and len(api.calls)==1
+
+
+def test_atk_insert_length_counts_utf8_bytes_but_caret_counts_characters():
+    from types import SimpleNamespace
+    from qcu.layers.desktop_linux import AtspiAPI
+    calls=[]
+    editable=SimpleNamespace(insert_text=lambda pos,text,length:calls.append((pos,text,length)) or True)
+    text=SimpleNamespace(get_n_selections=lambda:0,get_caret_offset=lambda:8)
+    obj=SimpleNamespace(get_text_iface=lambda:text,get_editable_text_iface=lambda:editable)
+    api=object.__new__(AtspiAPI)
+    send=api.prepare(obj,"type",dict(text=" 追加🚀"))
+    assert send() is True and calls==[(8," 追加🚀",11)]

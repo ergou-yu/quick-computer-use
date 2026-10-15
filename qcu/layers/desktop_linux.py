@@ -146,7 +146,9 @@ class AtspiAPI:
             if text is None or editable is None or text.get_n_selections():
                 raise LinuxError("unsupported", "Use fill for replacement/selected text; type needs an unselected editable caret")
             position = text.get_caret_offset()
-            return lambda: editable.insert_text(position, params["text"], len(params["text"]))
+            # The ATK adaptor forwards length as UTF-8 BYTES, while position
+            # remains a character offset. Character counts truncate CJK/emoji.
+            return lambda: editable.insert_text(position, params["text"], len(params["text"].encode("utf-8")))
         raise LinuxError("unsupported", f"Unsupported AT-SPI operation: {kind}")
 
     def close(self):

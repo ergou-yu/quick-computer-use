@@ -121,6 +121,8 @@ def verify(output):
             report.update(ok=True,cli_commands=len(report["records"]),target=obs["routing_meta"]["target"])
         except Exception as exc:
             report["error"]=str(exc)
+            try: call("observe","--compact",expect=None)
+            except Exception: pass
             raise
         finally:
             try: call("session","end",expect=None)
