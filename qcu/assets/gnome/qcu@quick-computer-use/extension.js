@@ -48,6 +48,7 @@ export default class QCUBridge extends Extension {
         this._busy = false;
         this._enabled = true;
         this._pointer = this._keyboard = null;
+        this._devicesReady = false;
         this._object = Gio.DBusExportedObject.wrapJSObject(XML, this);
         this._object.export(Gio.DBus.session, '/org/gnome/Shell/Extensions/QCU');
         this._watch = Gio.DBus.session.signal_subscribe('org.freedesktop.DBus', 'org.freedesktop.DBus',
@@ -182,6 +183,40 @@ export default class QCUBridge extends Extension {
         return codes;
     }
 
+    async _ensureDevices() {
+        if (this._devicesReady)
+            return;
+        const seat = global.backend?.get_default_seat?.() ?? Clutter.get_default_backend().get_default_seat();
+        const pending = new Set([Clutter.InputDeviceType.KEYBOARD_DEVICE, Clutter.InputDeviceType.POINTER_DEVICE]);
+        const before = new Set(seat.list_devices());
+        let signal = 0, timeout = 0, complete;
+        const ready = new Promise(resolve => { complete = resolve; });
+        try {
+            signal = seat.connect('device-added', (_seat, device) => {
+                if (!before.has(device))
+                    pending.delete(device.get_device_type());
+                if (!pending.size)
+                    complete(true);
+            });
+            timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+                timeout = 0;
+                complete(false);
+                return GLib.SOURCE_REMOVE;
+            });
+            this._keyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+            this._pointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+            if (!await ready)
+                fail('input_device_unavailable', 'Mutter did not register the virtual input devices');
+            await tick();
+            if (!this._enabled)
+                fail('target_changed', 'Bridge disabled during device registration');
+            this._devicesReady = true;
+        } finally {
+            if (signal) seat.disconnect(signal);
+            if (timeout) GLib.source_remove(timeout);
+        }
+    }
+
     async _request(r, sender) {
         if (r.op === 'bind') {
             const t = r.target;
@@ -193,6 +228,7 @@ export default class QCUBridge extends Extension {
             const candidates = this._windows().filter(w => w.get_pid() === t.pid && w.get_title() === r.title);
             if (candidates.length !== 1)
                 fail('wayland_window_ambiguous', 'AT-SPI PID/title must match exactly one Mutter window');
+            await this._ensureDevices();
             const binding = {token: GLib.uuid_string_random(), window_id: String(candidates[0].get_stable_sequence())};
             // Bound memory per connected worker, even for repeated observations.
             for (const [token, b] of this._bindings) {
@@ -282,8 +318,6 @@ export default class QCUBridge extends Extension {
         if (mask & busy)
             fail('input_busy', 'A pointer button or modifier is already held');
         const seat = global.backend?.get_default_seat?.() ?? Clutter.get_default_backend().get_default_seat();
-        // Select once before dispatch; never retry an absolute/relative send.
-        const relative = Number.parseInt(Config.PACKAGE_VERSION) === 50;
         if (keys.length)
             this._keyboard ??= seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         else
@@ -316,14 +350,7 @@ export default class QCUBridge extends Extension {
             for (let i = 0; i < points.length; i++) {
                 const [x, y] = points[i];
                 this._point(w, g, x, y);
-                await send(t => {
-                    if (relative) {
-                        const [px, py] = global.get_pointer();
-                        this._pointer.notify_relative_motion(t, x-px, y-py);
-                    } else {
-                        this._pointer.notify_absolute_motion(t, x, y);
-                    }
-                });
+                await send(t => this._pointer.notify_absolute_motion(t, x, y));
                 // Delivery can be asynchronous; wait only on the observed pointer.
                 const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
                 while (Math.abs(global.get_pointer()[0]-x) > 1 || Math.abs(global.get_pointer()[1]-y) > 1) {
@@ -355,7 +382,7 @@ export default class QCUBridge extends Extension {
             for (const direction of scroll)
                 await send(t => this._pointer.notify_discrete_scroll(t, direction, Clutter.ScrollSource.WHEEL));
             const [x, y] = global.get_pointer();
-            return {events, pointer_position: {x, y}, pointer_motion: relative ? 'virtual_relative' : 'virtual_absolute'};
+            return {events, pointer_position: {x, y}, pointer_motion: 'virtual_absolute'};
         } catch (e) {
             e.dispatched = sent;
             throw e;

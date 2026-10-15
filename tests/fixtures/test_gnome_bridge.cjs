@@ -107,8 +107,8 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     checks++;
     b = bridge();
     const hover = await input(b, 'hover', {x: 20, y: 30});
-    assert.deepEqual(events, [['relative', -10, 0]]);
-    assert.equal(hover.pointer_motion, 'virtual_relative');
+    assert.deepEqual(events, [['move', 20, 30]]);
+    assert.equal(hover.pointer_motion, 'virtual_absolute');
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
