@@ -3,6 +3,15 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] — 2026-10-25
+
+- Consolidate the verified Windows, Linux X11 and GNOME 46/50 Wayland work into
+  the 2.0.0 release designation. Synchronize package/skill metadata, lockfile,
+  documentation and the CI entrypoint version check.
+- This version update adds no runtime behavior or action-contract changes over
+  1.11.0. Keep the original platform test records and benchmark version labels;
+  report release-metadata checks separately from those functional measurements.
+
 ## [1.11.0] — 2026-10-15
 
 - Add an explicitly enabled GNOME 46/50 Wayland extension for bound-window native

@@ -1,4 +1,4 @@
-# Install QCU 1.11.0
+# Install QCU 2.0.0
 
 Python 3.11 or newer. Install into the environment that runs `qcu`; a different
 Python may have different dependencies and macOS permission identity.
@@ -36,7 +36,7 @@ use `$json | & .\scripts\qcu.ps1 act -` (or `batch -`) to preserve JSON quoting.
 ## Packaged wheel
 
 ```bash
-python -m pip install 'qcu-1.11.0-py3-none-any.whl[macos]'
+python -m pip install 'qcu-2.0.0-py3-none-any.whl[macos]'
 ```
 
 On Windows replace `[macos]` with `[windows]`, on Linux with `[linux]`; omit extras for web. Chromium is

@@ -1,6 +1,6 @@
 # QCU — Quick Computer Use
 
-**1.11.0.** QCU controls an explicitly selected browser page or
+**2.0.0.** QCU controls an explicitly selected browser page or
 desktop window with accessibility references. This revision binds references to
 a backend lifetime, target and observation; separates dispatch from verified
 results; and supports Windows UI Automation. Real Windows 10 native and CLI

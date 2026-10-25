@@ -1,5 +1,19 @@
 # QCU 测试报告（Test Report）
 
+## 2.0.0 版本整理与本地回归 — 2026-10-16
+
+2.0.0 承接 1.11.0 的运行时代码；本次同步 package/skill 版本、锁文件、
+文档及 CI 入口期望，没有新增动作行为或改变契约。历史测试记录保留原版本。
+
+- **Windows 完整回归：792 passed、1 skipped，60.15 秒。**
+  套件包含真实 Chromium/CDP 和 portable contract/mock，不能等同于
+  792 个 Windows 原生界面场景；唯一跳过项为 Linux live fixture。
+- Python、PowerShell 和 CMD 入口均报告 `qcu 2.0.0`；package、uv.lock、
+  wheel 元数据一致。wheel 构建通过，包含 GNOME 扩展 JS 与 metadata。
+- skill frontmatter 校验和 `git diff --check` 通过。
+- Linux、X11、GNOME 46/50 的功能与性能证据沿用下方 1.11.0 原始记录；
+  本次没有将它们重标为 2.0.0 的新实机或虚拟桌面测试。
+
 ## 1.11.0 GNOME Wayland 验证 — 2026-10-15
 
 本轮在实际 GNOME Shell/Mutter Wayland 合成器中运行 GTK3、AT-SPI2 和

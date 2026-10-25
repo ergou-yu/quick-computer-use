@@ -1,4 +1,4 @@
-# Linux AT-SPI2, X11 and GNOME Wayland — 1.11.0
+# Linux AT-SPI2, X11 and GNOME Wayland — 2.0.0
 
 Linux desktop uses `desktop_linux`. Normal reads and ref actions go directly
 through AT-SPI2 on one persistent worker. Web DOM/CDP, compact observations,

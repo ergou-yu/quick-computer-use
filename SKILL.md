@@ -3,7 +3,7 @@ name: quick-computer-use
 description: "Operate browser interfaces and Windows/macOS/Linux desktop apps with QCU, preferring target-bound accessibility references. Supports Windows UIA, macOS AX, Linux AT-SPI2, optional native fallback and CDP bridges. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
 metadata:
   author: QCU contributors
-  version: "1.11.0"
+  version: "2.0.0"
   requires:
     bins: ["qcu"]
     packages: ["playwright>=1.40"]
@@ -11,7 +11,7 @@ metadata:
 license: MIT
 ---
 
-# Quick Computer Use — 1.11.0
+# Quick Computer Use — 2.0.0
 
 Use structured controls on the **selected target**. QCU reports target identity,
 reference lifetime, backend capabilities, dispatch and requested-result evidence.

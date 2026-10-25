@@ -1,4 +1,4 @@
-# Desktop backends — 1.11.0
+# Desktop backends — 2.0.0
 
 Desktop selects the current platform: macOS AX, Windows UIA, Linux AT-SPI2,
 or an explicit unimplemented HarmonyOS backend.
