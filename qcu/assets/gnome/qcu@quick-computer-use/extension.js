@@ -155,12 +155,32 @@ export default class QCUBridge extends Extension {
         const backend = Clutter.get_default_backend();
         if (typeof backend.get_pointer_sprite === 'function') {
             const sprite = backend.get_pointer_sprite(global.stage);
-            const point = sprite.get_coords();
-            if (!finite(point.x) || !finite(point.y))
-                fail('pointer_unavailable', 'The compositor pointer sprite has no coordinates');
-            return [point.x, point.y];
+            if (typeof sprite?.get_coords === 'function') {
+                const point = sprite.get_coords();
+                if (!finite(point.x) || !finite(point.y))
+                    fail('pointer_unavailable', 'The compositor pointer sprite has no coordinates');
+                return [point.x, point.y];
+            }
         }
         return global.get_pointer().slice(0,2);
+    }
+
+    _approachPoint(x, y) {
+        const [px, py] = this._pointerPosition();
+        const monitor = Main.layoutManager?.monitors?.find(m =>
+            px >= m.x && py >= m.y && px < m.x+m.width && py < m.y+m.height);
+        if (!monitor)
+            return [];
+        const cornerSize = Math.max(32, Main.panel?.height ?? 0) + 1;
+        if (py < monitor.y+cornerSize &&
+            (Math.abs(px-monitor.x) < 1 || Math.abs(px-(monitor.x+monitor.width-1)) < 1)) {
+            // Plan once, before dispatch: leave the top corner along its edge,
+            // then approach the target. Never disable/release a Mutter barrier
+            // or retry a motion that failed to arrive. No button is held here.
+            const edgeY = Math.min(monitor.y+monitor.height-1, Math.max(y, monitor.y+cornerSize));
+            return Math.abs(edgeY-py) > 1 ? [[px, edgeY]] : [];
+        }
+        return [];
     }
 
     _point(w, g, x, y) {
@@ -334,6 +354,7 @@ export default class QCUBridge extends Extension {
             this._keyboard ??= seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         else
             this._pointer ??= seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        const approach = points.length ? this._approachPoint(...points[0]) : [];
         let sent = false, events = 0, heldKeys = [], heldButtons = [];
         const send = async fn => {
             if (!this._enabled)
@@ -358,6 +379,15 @@ export default class QCUBridge extends Extension {
             for (const code of [...keys].reverse()) {
                 await send(t => this._keyboard.notify_keyval(t, code, Clutter.KeyState.RELEASED));
                 heldKeys.pop();
+            }
+            for (const [x, y] of approach) {
+                await send(t => this._pointer.notify_absolute_motion(t, x, y));
+                const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
+                while (Math.abs(this._pointerPosition()[0]-x) > 1 || Math.abs(this._pointerPosition()[1]-y) > 1) {
+                    if (GLib.get_monotonic_time() > pointerDeadline)
+                        fail('pointer_mismatch', 'Mutter constrained the planned corner approach; no button sent');
+                    await nextFrame();
+                }
             }
             for (let i = 0; i < points.length; i++) {
                 const [x, y] = points[i];
@@ -394,7 +424,7 @@ export default class QCUBridge extends Extension {
             for (const direction of scroll)
                 await send(t => this._pointer.notify_discrete_scroll(t, direction, Clutter.ScrollSource.WHEEL));
             const [x, y] = this._pointerPosition();
-            return {events, pointer_position: {x, y}, pointer_motion: 'virtual_absolute'};
+            return {events, pointer_position: {x, y}, pointer_motion: 'virtual_absolute', approach_points: approach.length};
         } catch (e) {
             e.dispatched = sent;
             throw e;

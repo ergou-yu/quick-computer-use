@@ -53,7 +53,7 @@ _KEYS.update({f"f{i}": 111+i for i in range(1, 25)})
 _MODS = {"ctrl": 17, "control": 17, "alt": 18, "shift": 16, "win": 91, "windows": 91}
 
 
-def key_events(key: str) -> list[INPUT]:
+def key_events(key: str, *, map_scan=None) -> list[INPUT]:
     if not isinstance(key, str) or not key:
         raise NativeError("invalid_key", "press_key requires a named key or combo")
     pieces = key.casefold().split("+")
@@ -66,6 +66,12 @@ def key_events(key: str) -> list[INPUT]:
         raise NativeError("invalid_key", "Unknown Windows key")
     extended = 1 if vk in {33, 34, 35, 36, 37, 38, 39, 40, 45, 46} else 0
     def event(code, flags=0):
+        if map_scan is not None:
+            scan = map_scan(code)
+            if not scan or scan >> 8 not in (0, 0xE0):
+                raise NativeError("unsupported_key", "Key has no supported scan code in the target keyboard layout")
+            return INPUT(type=1, ki=KEYBDINPUT(wScan=scan & 0xFF,
+                dwFlags=8 | (1 if scan & 0xFF00 else 0) | (flags & 2)))
         return INPUT(type=1, ki=KEYBDINPUT(wVk=code, dwFlags=flags))
     return ([event(code) for code in mods] + [event(vk, extended), event(vk, extended | 2)]
             + [event(code, 2) for code in reversed(mods)])
@@ -109,6 +115,8 @@ class WindowsNative:
             "GetGUIThreadInfo": ([w.DWORD, c.POINTER(GUIINFO)], w.BOOL),
             "PostMessageW": ([w.HWND,w.UINT,w.WPARAM,w.LPARAM],w.BOOL),
             "MapVirtualKeyW": ([w.UINT,w.UINT],w.UINT),
+            "GetKeyboardLayout": ([w.DWORD], c.c_void_p),
+            "MapVirtualKeyExW": ([w.UINT, w.UINT, c.c_void_p], w.UINT),
             "ScreenToClient": ([w.HWND,c.POINTER(w.POINT)],w.BOOL),
             "GetClassNameW": ([w.HWND,w.LPWSTR,c.c_int],c.c_int),
             "SendMessageTimeoutW": ([w.HWND,w.UINT,w.WPARAM,w.LPARAM,w.UINT,w.UINT,c.POINTER(c.c_size_t)],c.c_ssize_t),
@@ -265,7 +273,12 @@ class WindowsNative:
             if kind == "type":
                 events = unicode_events(params.get("text"))
             elif kind == "press_key":
-                events = key_events(params.get("key"))
+                tid = self.user.GetWindowThreadProcessId(live_focus, None)
+                layout = self.user.GetKeyboardLayout(tid)
+                if not layout:
+                    raise NativeError("keyboard_layout_unavailable", "Cannot read the focused thread's keyboard layout")
+                events = key_events(params.get("key"),
+                    map_scan=lambda code: self.user.MapVirtualKeyExW(code, 4, layout))
             else:
                 point = float(params["x"]), float(params["y"])
                 self._point_gate(target, bounds, point)

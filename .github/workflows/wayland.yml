@@ -76,7 +76,7 @@ jobs:
       - name: Install current Ubuntu LTS GNOME
         run: |
           # These archived images exercise GNOME 47/48 without upgrading them.
-          if test '${{ matrix.ubuntu }}' = 24.10 || test '${{ matrix.ubuntu }}' = 25.04; then
+          if test '${{ matrix.ubuntu }}' = 24.10; then
             sed -i -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' -e 's|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
           fi
           apt-get update

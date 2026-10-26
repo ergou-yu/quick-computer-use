@@ -18,7 +18,9 @@ def fake_native():
     native.physical_pixels = contextlib.nullcontext
     native._point_gate = lambda *_: None
     native.user = SimpleNamespace(GetAsyncKeyState=lambda *_: 0, IsWindowEnabled=lambda *_: True,
-        GetSystemMetrics=lambda i: {76:-200, 77:0, 78:1000, 79:800}[i], IsChild=lambda *_: False)
+        GetSystemMetrics=lambda i: {76:-200, 77:0, 78:1000, 79:800}[i], IsChild=lambda *_: False,
+        GetWindowThreadProcessId=lambda *_: 7, GetKeyboardLayout=lambda _: 0x4090409,
+        MapVirtualKeyExW=lambda key, mode, layout: key)
     native.calls = []
     native.cursor=(0,0)
     def set_cursor(x,y): native.cursor=(x,y); return True
@@ -44,6 +46,16 @@ def test_native_packets_have_balanced_modifier_and_surrogate_pairs():
     assert len(typed) == 8
     assert [e.ki.wScan for e in typed[::2]] == [65, 0x4E2D, 0xD83D, 0xDE80]
     assert all(typed[i].ki.dwFlags == 4 and typed[i+1].ki.dwFlags == 6 for i in range(0,8,2))
+
+
+def test_send_input_keys_use_target_layout_scan_codes_and_extended_prefix():
+    mapping = {17: 0x1D, 16: 0x2A, 37: 0xE04B}
+    events = key_events("Ctrl+Shift+Left", map_scan=mapping.__getitem__)
+    assert [e.ki.wVk for e in events] == [0] * 6
+    assert [e.ki.wScan for e in events] == [0x1D, 0x2A, 0x4B, 0x4B, 0x2A, 0x1D]
+    assert [e.ki.dwFlags for e in events] == [8, 8, 9, 11, 10, 10]
+    with pytest.raises(NativeError):
+        key_events("F7", map_scan=lambda _: 0)
 
 
 @pytest.mark.parametrize("key", ["", "Cmd+A", "Ctrl+NotAKey"])

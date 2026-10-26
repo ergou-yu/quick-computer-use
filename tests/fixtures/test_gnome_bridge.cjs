@@ -7,10 +7,10 @@ const path = require('node:path');
 let source = fs.readFileSync(path.join(__dirname, '../../qcu/assets/gnome/qcu@quick-computer-use/extension.js'), 'utf8');
 source = source.replace(/^import .*;\r?\n/gm, '').replace('export default class QCUBridge', 'class QCUBridge');
 const events = [];
-let pointer = [30, 30, 0], clock = 1, onKey = () => {};
+let pointer = [30, 30, 0], clock = 1, onKey = () => {}, onMove = () => true;
 const keyboard = {notify_keyval(t, key, state) { events.push(['key', key, state]); onKey(key, state); }};
 const mouse = {
-    notify_absolute_motion(t, x, y) { events.push(['move', x, y]); pointer = [x, y, 0]; },
+    notify_absolute_motion(t, x, y) { events.push(['move', x, y]); if (onMove(x, y)) pointer = [x, y, 0]; },
     notify_relative_motion(t, x, y) { events.push(['relative', x, y]); pointer = [pointer[0]+x, pointer[1]+y, 0]; },
     notify_button(t, button, state) { events.push(['button', button, state]); },
     notify_discrete_scroll(t, direction) { events.push(['scroll', direction]); },
@@ -38,6 +38,7 @@ function bridge() {
     events.length = 0;
     pointer = [30, 30, 0];
     onKey = () => {};
+    onMove = () => true;
     const b = new Bridge();
     b._enabled = true;
     b._window = () => w;
@@ -115,6 +116,27 @@ const input = (b, kind, params) => b._input({kind, params, binding: {}}, w, g, '
     const position = Bridge.prototype._pointerPosition.call({});
     assert.equal(position[0], 41);
     assert.equal(position[1], 73);
+    checks++;
+    // GNOME 49 has a pointer sprite without get_coords: retain its legacy query.
+    const backend = Clutter.get_default_backend;
+    Clutter.get_default_backend = () => ({get_pointer_sprite: () => ({})});
+    pointer = [47, 82, 0];
+    assert.deepEqual(Array.from(Bridge.prototype._pointerPosition.call({})), [47, 82]);
+    Clutter.get_default_backend = backend;
+    checks++;
+    b = bridge();
+    main.layoutManager = {monitors: [{x: 0, y: 0, width: 1000, height: 800}]};
+    main.panel = {height: 32};
+    pointer = [0, 0, 0];
+    const routed = await input(b, 'click', {x: 200, y: 100});
+    assert.equal(routed.approach_points, 1);
+    assert.deepEqual(events, [['move', 0, 100], ['move', 200, 100], ['button', 1, 1], ['button', 1, 0]]);
+    checks++;
+    b = bridge();
+    pointer = [0, 0, 0];
+    onMove = () => { clock += 500001; return false; };
+    await assert.rejects(input(b, 'click', {x: 200, y: 100}), e => e.reason === 'pointer_mismatch' && e.dispatched === true);
+    assert.deepEqual(events, [['move', 0, 100]]); // No retry, final motion or button.
     checks++;
     console.log(`${checks} GNOME bridge failure-boundary checks passed (mock host)`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
