@@ -56,8 +56,8 @@ public class QCUNativeFixture : Form {
   button.Click+=(s,e)=>{ result.Text="Clicked "+(++clicks); };
   result.Text="Idle"; result.Bounds=new Rectangle(180,70,250,28);
   keys.Text="Keys idle"; keys.Bounds=new Rectangle(20,110,400,25);
-  edit.KeyDown+=(s,e)=>{ if(e.Control && e.KeyCode==Keys.A) keys.Text="Ctrl+A observed"; if(e.KeyCode==Keys.F6) keys.Text="F6 observed"; if(e.KeyCode==Keys.F7) keys.Text="F7 observed"; };
-  edit.PreviewKeyDown+=(s,e)=>{ if(e.KeyCode==Keys.F6 || e.KeyCode==Keys.F7) e.IsInputKey=true; };
+  edit.KeyDown+=(s,e)=>{ if(e.Control && e.KeyCode==Keys.A) keys.Text="Ctrl+A observed"; if(e.KeyCode==Keys.F6) keys.Text="F6 observed"; if(e.KeyCode==Keys.F7) keys.Text="F7 observed"; if(e.Control && e.KeyCode==Keys.F8) keys.Text="Ctrl+F8 observed"; };
+  edit.PreviewKeyDown+=(s,e)=>{ if(e.KeyCode==Keys.F6 || e.KeyCode==Keys.F7 || e.KeyCode==Keys.F8) e.IsInputKey=true; };
   surface.AccessibleName="Native surface"; surface.BackColor=Color.FromArgb(30,140,230); surface.Bounds=new Rectangle(20,170,440,180);
   surface.MouseDown+=(s,e)=>{ surface.Focus(); if(e.Button==MouseButtons.Left) { dragging=true; start=e.Location; } if(e.Button==MouseButtons.Right) result.Text="Right "+(++rights); };
   surface.MouseUp+=(s,e)=>{ if(dragging && Math.Abs(e.X-start.X)>40) drag.Text="Drag done"; dragging=false; };
@@ -76,6 +76,7 @@ public class QCUNativeFixture : Form {
    if(cmd=="overlay") { overlay=new QCUOverlay(); overlay.FormBorderStyle=FormBorderStyle.None; overlay.ShowInTaskbar=false; overlay.TopMost=true; overlay.BackColor=Color.Magenta; overlay.StartPosition=FormStartPosition.Manual; overlay.Bounds=new Rectangle(PointToScreen(surface.Location),surface.Size); overlay.Show(this); SetForegroundWindow(Handle); edit.Focus(); }
    if(cmd=="clear") { if(overlay!=null) overlay.Close(); FixtureForeground(); }
    if(cmd=="move") { Location=new Point(Left+45,Top+20); }
+   if(cmd=="clear_keys") { keys.Text="Keys idle"; FixtureForeground(); }
    if(cmd=="background") { overlay=new Form(); overlay.Text="QCU disposable other foreground"; overlay.Size=new Size(200,120); overlay.Show(); overlay.Activate(); SetForegroundWindow(overlay.Handle); }
    File.Delete(commands);
   }; timer.Start();
@@ -200,18 +201,23 @@ def main():
             semantic=act('fill',dict(ref=fresh['Native input']['ref'],text='UIA fast route retained'))
             assert semantic['outcome']=='verified' and semantic['data']['method']=='UIA.value'
             if args.check_send_input or args.require_send_input:
-                physical=act('press_key',dict(ref=fresh['Native input']['ref'],key='F7',input_transport='send_input',verify=condition('F7 observed')),expected=None)
+                fixture_command('clear_keys')
+                probe_key='F6' if args.require_send_input else 'F7'
+                physical=act('press_key',dict(ref=fresh['Native input']['ref'],key=probe_key,input_transport='send_input',verify=condition(probe_key+' observed')),expected=None)
                 report['send_input_probe']=dict(verified=physical.get('outcome')=='verified',result=physical)
                 if args.require_send_input:
                     assert physical.get('outcome')=='verified',physical
                     # Distinct requested actions, each with independent result readback.
-                    selected=act('press_key',dict(ref=fresh['Native input']['ref'],key='Ctrl+A',input_transport='send_input',verify=condition('Ctrl+A observed')))
-                    assert selected['outcome']=='verified',selected
+                    combo=act('press_key',dict(ref=fresh['Native input']['ref'],key='Ctrl+F8',input_transport='send_input',verify=condition('Ctrl+F8 observed')))
+                    assert combo['outcome']=='verified',combo
+                    # Prepare an empty field semantically. A received Ctrl+A is
+                    # not proof that this provider implements Select All.
+                    assert act('fill',dict(ref=fresh['Native input']['ref'],text=''))['outcome']=='verified'
                     typed=act('type',dict(ref=fresh['Native input']['ref'],text='Physical 中文 🚀',input_transport='send_input',verify=dict(kind='value',ref=fresh['Native input']['ref'],equals='Physical 中文 🚀',timeout_ms=2000)))
                     assert typed['outcome']=='verified',typed
                     clicked=act('click',{**point(fresh['Native click']),'input_transport':'send_input','verify':condition('Clicked 3')})
                     assert clicked['outcome']=='verified',clicked
-                    report['send_input_required']=dict(verified=True,checks=['F7','Ctrl+A','Unicode value','pointer click'])
+                    report['send_input_required']=dict(verified=True,checks=[probe_key,'Ctrl+F8','Unicode value','pointer click'])
                 observe()  # Read after dispatch; never repeat an unconfirmed input.
             report['ok']=True
         except Exception as exc:

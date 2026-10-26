@@ -39,7 +39,10 @@ export default class TestControl extends Extension {
             Main.overview.hide();
             w.activate(global.get_current_time());
         } else if (r.op === 'move') {
-            w.move_frame(true, r.x, r.y);
+            const monitor = Number.isInteger(r.monitor) ? Main.layoutManager.monitors[r.monitor] : null;
+            if (Number.isInteger(r.monitor) && !monitor)
+                throw new Error('Requested fixture monitor is unavailable');
+            w.move_frame(true, monitor ? monitor.x+40 : r.x, monitor ? monitor.y+80 : r.y);
         } else if (r.op === 'overlay') {
             const actor = new St.Widget({reactive: true, style: 'background-color: red;',
                 x: r.x-30, y: r.y-30, width: 100, height: 100});
@@ -51,6 +54,6 @@ export default class TestControl extends Extension {
                 throw new Error('Other fixture window not found');
             other.activate(global.get_current_time());
         }
-        return JSON.stringify({ok: true, bounds: w.get_frame_rect()});
+        return JSON.stringify({ok: true, bounds: w.get_frame_rect(), monitors: Main.layoutManager.monitors});
     }
 }

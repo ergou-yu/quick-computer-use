@@ -123,7 +123,8 @@ class GnomeNative:
         return dict(target=dict(target), method="GNOME.Mutter.NativeInput",
                     wayland_window_id=binding["window_id"], retry_safe=False, input_mode="native",
                     coordinate_space="wayland_logical", events=value["events"],
-                    pointer_position=value.get("pointer_position"), pointer_motion=value.get("pointer_motion"))
+                    pointer_position=value.get("pointer_position"), pointer_motion=value.get("pointer_motion"),
+                    approach_points=value.get("approach_points", 0))
 
     def close(self):
         # The shared session bus belongs to GI/AT-SPI; do not close it.

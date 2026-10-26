@@ -17,7 +17,11 @@ gsettings set org.gnome.desktop.interface enable-hot-corners "${QCU_TEST_HOT_COR
 qcu_shell_version=$(gnome-shell --version | awk '{print $3}')
 gsettings set org.gnome.shell welcome-dialog-last-shown-version "$qcu_shell_version"
 gnome-shell --version >"$qcu_evidence/version.txt"
-gnome-shell --headless --wayland --virtual-monitor 1280x1024 --no-x11 >"$qcu_evidence/gnome.log" 2>&1 &
+qcu_monitor_args=(--virtual-monitor 1280x1024)
+if test "${QCU_TEST_MULTIMONITOR:-0}" = 1; then
+    qcu_monitor_args+=(--virtual-monitor 1024x768)
+fi
+gnome-shell --headless --wayland "${qcu_monitor_args[@]}" --no-x11 >"$qcu_evidence/gnome.log" 2>&1 &
 qcu_shell_pid=$!
 qcu_cleanup() {
     kill "$qcu_shell_pid" 2>/dev/null || true

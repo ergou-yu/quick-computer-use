@@ -162,7 +162,10 @@ export default class QCUBridge extends Extension {
                 return [point.x, point.y];
             }
         }
-        return global.get_pointer().slice(0,2);
+        const point = global.get_pointer().slice(0,2);
+        if (!point.every(finite))
+            fail('pointer_unavailable', 'The compositor has no finite pointer coordinates');
+        return point;
     }
 
     _approachPoint(x, y) {

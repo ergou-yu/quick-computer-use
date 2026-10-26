@@ -133,7 +133,11 @@ def verify(output):
             blocked=act("press_key",dict(key="F6"),expect=2)
             assert blocked["dispatch_state"]=="not_sent" and blocked["data"]["reason"] in {"foreground_mismatch","focus_mismatch"},blocked
             command("clear")
-            command("move",x=420,y=250)
+            if wayland and os.environ.get("QCU_TEST_MULTIMONITOR") == "1":
+                command("move",x=420,y=250,monitor=1)
+                report["multimonitor_move"] = True
+            else:
+                command("move",x=420,y=250)
             moved=act("screenshot",dict(path=str(output.parent/"linux-moved.png")))
             assert moved["data"]["coordinate_origin"]!=before["data"]["coordinate_origin"],moved
             if wayland:

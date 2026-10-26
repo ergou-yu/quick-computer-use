@@ -131,3 +131,19 @@ def test_wayland_backend_is_lazy_and_never_selects_xwayland(monkeypatch):
     monkeypatch.setattr("qcu.layers._linux_wayland.GnomeNative",lambda:calls.append("wayland") or object())
     first=api.native
     assert api.native is first and calls==["wayland"]
+
+
+@pytest.mark.parametrize("origin,scale", [(-1280,1), (1280,1.5), (2560,2)])
+def test_capture_declares_each_monitor_origin_and_fractional_pixel_scale(tmp_path, origin, scale):
+    n,_=native()
+    bounds=dict(x=origin,y=40,width=4,height=2)
+    width,height=int(4*scale),int(2*scale)
+    png=encode_png(b"\0\0\xff\0"*(width*height),width,height,32,width*4)
+    n._bound=({},dict(window_id="42"))
+    n._identity=lambda _:{}
+    n.geometry=lambda _:bounds
+    n._request=lambda *a,**k:dict(bounds=bounds,png=base64.b64encode(png).decode())
+    result=n.capture({},str(tmp_path/"monitor.png"))
+    assert result["coordinate_origin"]==dict(x=origin,y=40)
+    assert result["coordinate_scale"]==scale
+    assert result["pixel_size"]==dict(width=width,height=height)

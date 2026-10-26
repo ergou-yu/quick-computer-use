@@ -71,6 +71,7 @@ jobs:
     timeout-minutes: 20
     env:
       DEBIAN_FRONTEND: noninteractive
+      QCU_TEST_MULTIMONITOR: ${{ matrix.ubuntu == '26.04' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - name: Install current Ubuntu LTS GNOME
