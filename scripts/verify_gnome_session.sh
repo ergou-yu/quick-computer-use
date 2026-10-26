@@ -13,7 +13,7 @@ mkdir -p "$XDG_DATA_HOME/gnome-shell/extensions/qcu-test@quick-computer-use"
 cp tests/fixtures/gnome-control/* "$XDG_DATA_HOME/gnome-shell/extensions/qcu-test@quick-computer-use/"
 gsettings set org.gnome.shell enabled-extensions '["qcu@quick-computer-use","qcu-test@quick-computer-use"]'
 gsettings set org.gnome.desktop.interface enable-animations false
-gsettings set org.gnome.desktop.interface enable-hot-corners false
+gsettings set org.gnome.desktop.interface enable-hot-corners "${QCU_TEST_HOT_CORNERS:-true}"
 qcu_shell_version=$(gnome-shell --version | awk '{print $3}')
 gsettings set org.gnome.shell welcome-dialog-last-shown-version "$qcu_shell_version"
 gnome-shell --version >"$qcu_evidence/version.txt"

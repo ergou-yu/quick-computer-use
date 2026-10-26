@@ -1,4 +1,4 @@
-// Native bridge for GNOME 46. Installation/enabling is an explicit user action.
+// Native bridge for GNOME 46-50. Installation/enabling is an explicit user action.
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -152,8 +152,8 @@ export default class QCUBridge extends Extension {
     }
 
     _pointerPosition() {
-        if (Number.parseInt(Config.PACKAGE_VERSION) === 50) {
-            const backend = Clutter.get_default_backend();
+        const backend = Clutter.get_default_backend();
+        if (typeof backend.get_pointer_sprite === 'function') {
             const sprite = backend.get_pointer_sprite(global.stage);
             const point = sprite.get_coords();
             if (!finite(point.x) || !finite(point.y))
@@ -367,7 +367,7 @@ export default class QCUBridge extends Extension {
                 const pointerDeadline = Math.min(deadline, GLib.get_monotonic_time()+500000);
                 while (Math.abs(this._pointerPosition()[0]-x) > 1 || Math.abs(this._pointerPosition()[1]-y) > 1) {
                     if (GLib.get_monotonic_time() > pointerDeadline)
-                        fail('pointer_mismatch', `Mutter pointer did not reach (${x},${y}); actual=${global.get_pointer().slice(0,2)}`);
+                        fail('pointer_mismatch', `Mutter pointer did not reach (${x},${y}); actual=${this._pointerPosition()}`);
                     await nextFrame();
                 }
                 this._point(w, g, x, y);

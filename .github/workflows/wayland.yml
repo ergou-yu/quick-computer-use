@@ -66,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ubuntu: ['24.04', '26.04']
+        ubuntu: ['24.04', '24.10', '25.04', '25.10', '26.04']
     container: ubuntu:${{ matrix.ubuntu }}
     timeout-minutes: 20
     env:
@@ -75,6 +75,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install current Ubuntu LTS GNOME
         run: |
+          # These archived images exercise GNOME 47/48 without upgrading them.
+          if test '${{ matrix.ubuntu }}' = 24.10 || test '${{ matrix.ubuntu }}' = 25.04; then
+            sed -i -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' -e 's|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+          fi
           apt-get update
           apt-get install -y --no-install-recommends python3-venv python3-gi gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core dbus-x11 gnome-shell mesa-utils libgl1-mesa-dri fonts-noto-cjk fonts-noto-color-emoji
           mkdir -p /run/dbus

@@ -91,6 +91,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--check-send-input',action='store_true',help='record optional physical injection result separately')
+    parser.add_argument('--require-send-input',action='store_true',help='require verified physical keyboard, Unicode and pointer results')
     args=parser.parse_args()
     if sys.platform != 'win32':
         print(json.dumps(dict(ok=False,reason='requires_windows_interactive_desktop')))
@@ -198,10 +199,20 @@ def main():
             # Original fast semantic route remains available after native operations.
             semantic=act('fill',dict(ref=fresh['Native input']['ref'],text='UIA fast route retained'))
             assert semantic['outcome']=='verified' and semantic['data']['method']=='UIA.value'
-            if args.check_send_input:
+            if args.check_send_input or args.require_send_input:
                 physical=act('press_key',dict(ref=fresh['Native input']['ref'],key='F7',input_transport='send_input',verify=condition('F7 observed')),expected=None)
                 report['send_input_probe']=dict(verified=physical.get('outcome')=='verified',result=physical)
-                observe()  # Read after an unknown dispatch; never repeat the key.
+                if args.require_send_input:
+                    assert physical.get('outcome')=='verified',physical
+                    # Distinct requested actions, each with independent result readback.
+                    selected=act('press_key',dict(ref=fresh['Native input']['ref'],key='Ctrl+A',input_transport='send_input',verify=condition('Ctrl+A observed')))
+                    assert selected['outcome']=='verified',selected
+                    typed=act('type',dict(ref=fresh['Native input']['ref'],text='Physical 中文 🚀',input_transport='send_input',verify=dict(kind='value',ref=fresh['Native input']['ref'],equals='Physical 中文 🚀',timeout_ms=2000)))
+                    assert typed['outcome']=='verified',typed
+                    clicked=act('click',{**point(fresh['Native click']),'input_transport':'send_input','verify':condition('Clicked 3')})
+                    assert clicked['outcome']=='verified',clicked
+                    report['send_input_required']=dict(verified=True,checks=['F7','Ctrl+A','Unicode value','pointer click'])
+                observe()  # Read after dispatch; never repeat an unconfirmed input.
             report['ok']=True
         except Exception as exc:
             report['error']=str(exc)
