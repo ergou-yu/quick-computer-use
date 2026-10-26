@@ -1,4 +1,4 @@
-# Linux AT-SPI2, X11 and GNOME Wayland — 2.0.0
+# Linux AT-SPI2, X11 and GNOME Wayland — 2.0.1
 
 Linux desktop uses `desktop_linux`. Normal reads and ref actions go directly
 through AT-SPI2 on one persistent worker. Web DOM/CDP, compact observations,
@@ -92,7 +92,7 @@ Drag endpoints can also use `ref_from`/`ref_to` with live bounds. A ref click's
 explicit `fallback:"native"` is honored only if a semantic interface/action is
 unsupported before dispatch; a late AT-SPI error cannot trigger fallback.
 
-## GNOME 46/50 Wayland (Ubuntu 24.04 and 26.04)
+## GNOME 46-50 Wayland (Ubuntu 24.04 through 26.04 fixtures)
 
 The bundled **QCU Native Wayland Bridge** extension is optional. Installing and
 enabling it grants native capture/input access to the logged-in GNOME session,
@@ -133,9 +133,12 @@ workspace with keyboard focus, no Shell overview/lock/modal, no held modifiers
 or mouse buttons, and owned pointer points checked through the compositor scene.
 It never activates a window. These checks repeat across event delivery; partial
 failures release only attempted presses and return unknown without retry.
-Mutter pointer barriers can constrain movement, including GNOME 50 hot corners
-when the headless pointer starts at an edge. QCU stops before button dispatch
-if the pointer does not arrive; it does not disable barriers or replay movement.
+At a top monitor corner, QCU plans an initial edge waypoint before dispatch,
+then moves to the target. This exits the hot-corner region without disabling
+or releasing Mutter barriers. Each planned motion must arrive before the next
+one or any button press; a constrained motion still stops without replay.
+GNOME 46-50 fixtures keep hot corners enabled. Animations are disabled only
+in temporary test settings; production does not change desktop settings.
 
 Wayland clients cannot reliably report global screen positions. Native **refs**
 read explicit AT-SPI `CoordType.WINDOW` bounds and translate through Mutter's

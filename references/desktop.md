@@ -1,4 +1,4 @@
-# Desktop backends — 2.0.0
+# Desktop backends — 2.0.1
 
 Desktop selects the current platform: macOS AX, Windows UIA, Linux AT-SPI2,
 or an explicit unimplemented HarmonyOS backend.
@@ -234,9 +234,10 @@ call. Foreground/focus/point ownership and live ref membership are required.
 The default HWND channel supports clicks, double/right click, hover, wheel,
 drag, UTF-16 text and named keys. Standard Edit Ctrl+A selects all with readback;
 other modifier combos need explicit `input_transport:"send_input"`.
-SendInput returned accepted counts without a verified fixture effect on the
-test host; do not infer delivery or repeat through another channel. Normal HWND
-input was verified. Strict-background never enables background keyboard input.
+The Windows 10 fixture verified SendInput named-key, modifier, Unicode and
+pointer effects on 2026-10-26 using strict conditions. Earlier unconfirmed
+attempts are retained in TEST-REPORT.md; accepted counts alone still do not
+prove delivery. Normal HWND input was verified. Strict-background never enables background keyboard input.
 Windows 10+ per-thread DPI awareness avoids changing the caller's process DPI.
 Window moves invalidate image grounding. Secure desktops and protected/empty
 PrintWindow providers fail explicitly.

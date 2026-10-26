@@ -1,4 +1,4 @@
-# QCU API — 2.0.0
+# QCU API — 2.0.1
 
 ## Target and observation
 
@@ -192,5 +192,5 @@ UIA worker timeout blocks new work in that worker until restart/re-observation.
    an explicit read-only legacy observer; pid/window scoping is unsupported.
 6. Query platform/target capabilities. Windows UIA and Linux AT-SPI2 expose
    target-specific capabilities; Linux native capture/input requires X11 or
-   GNOME 46/50 Wayland with the explicitly enabled QCU bridge extension.
+   GNOME 46-50 Wayland with the explicitly enabled QCU bridge extension.
    HarmonyOS is an explicit unimplemented registration.

@@ -3,6 +3,22 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] — 2026-10-26
+
+- Plan a corner-exit waypoint before native pointer dispatch, allowing GNOME
+  hot corners to remain enabled. Retain per-motion arrival, focus and target
+  checks; never disable/release barriers, retry failed input or change settings.
+- Support GNOME 47/48/49 alongside 46/50, detecting the pointer sprite coordinate
+  API separately from sprite availability. Add all five virtual GNOME versions
+  to CI, plus a secondary-monitor native ref/capture scenario and fractional
+  scale metadata contracts.
+- Add strict Windows physical input validation with independent named key,
+  modifier shortcut, Unicode value and click conditions. API acceptance alone
+  remains insufficient; unconfirmed SendInput results fail strict validation.
+- Preserve semantic/DOM paths, lazy native loading, persistent workers and
+  bounded batches. Physical Linux/macOS coverage and KDE/wlroots adapters remain
+  outside this validation scope.
+
 ## [2.0.0] — 2026-10-25
 
 - Consolidate the verified Windows, Linux X11 and GNOME 46/50 Wayland work into

@@ -83,9 +83,9 @@ def desktop_capabilities(*, layer: str | None = None,
         "native_input_transports": (["window_message","send_input"] if layer == "desktop_uia" else
                                     ["x11_xtest","gnome_wayland_bridge"] if layer == "desktop_linux" else []),
         "target_window_capture": layer in {"desktop_ax","desktop_uia","desktop_linux"},
-        "native_session_support": "X11 or GNOME 46/50 Wayland with explicitly enabled QCU extension" if layer == "desktop_linux" else None,
+        "native_session_support": "X11 or GNOME 46-50 Wayland with explicitly enabled QCU extension" if layer == "desktop_linux" else None,
         "available": False, "reason": reason,
         "verification_status": ("Windows 10 native fixture verified (2026-10-14)" if layer == "desktop_uia" else
-                                "Ubuntu GTK/X11 and GNOME 46/50 Wayland virtual fixtures verified (2026-10-15); physical desktop unverified"
+                                "Ubuntu GTK/X11 and GNOME 46-50 Wayland virtual fixtures verified (2026-10-26); physical desktop unverified"
                                 if layer == "desktop_linux" else None),
     }

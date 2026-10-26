@@ -3,7 +3,7 @@ name: quick-computer-use
 description: "Operate browser interfaces and Windows/macOS/Linux desktop apps with QCU, preferring target-bound accessibility references. Supports Windows UIA, macOS AX, Linux AT-SPI2, optional native fallback and CDP bridges. Use for live UI tasks or testing QCU itself. Preserve the selected browser, tab, app and window."
 metadata:
   author: QCU contributors
-  version: "2.0.0"
+  version: "2.0.1"
   requires:
     bins: ["qcu"]
     packages: ["playwright>=1.40"]
@@ -11,15 +11,15 @@ metadata:
 license: MIT
 ---
 
-# Quick Computer Use — 2.0.0
+# Quick Computer Use — 2.0.1
 
 Use structured controls on the **selected target**. QCU reports target identity,
 reference lifetime, backend capabilities, dispatch and requested-result evidence.
 A successful API call or changing screen does not alone prove task completion.
 Windows UIA and the CLI/daemon pipeline were verified on a real Windows 10
 interactive desktop (2026-10-14). Each new target still requires a live probe.
-Linux AT-SPI/X11 and GNOME 46/50 Wayland were verified in Ubuntu virtual
-desktop CI (2026-10-15), distinct from physical-machine validation.
+Linux AT-SPI/X11 and GNOME 46-50 Wayland were verified in Ubuntu virtual
+desktop CI (2026-10-26), distinct from physical-machine validation.
 
 ## Linux desktop
 
@@ -38,7 +38,7 @@ an exact PID/title match to one EWMH client. XTEST input requires owned focus,
 an active window and unobstructed pointer points; it never activates a window.
 Use native screenshot coordinates or current refs; re-locate after movement.
 Native `press_key` uses the existing keymap; unsupported layout groups fail.
-On GNOME 46/50 Wayland, install and explicitly enable the bundled GNOME bridge;
+On GNOME 46-50 Wayland, install and explicitly enable the bundled GNOME bridge;
 see [Linux](references/linux.md). Native capture/input binds the same AT-SPI
 PID/title to one Mutter window and pins the Shell connection, extension instance
 and window sequence. Ref coordinates use live AT-SPI WINDOW bounds translated
@@ -97,11 +97,15 @@ units are 120 per notch; positive dy scrolls down. Drag endpoints may be live
 
 The default HWND message channel supports pointer actions, UTF-16 text, named
 keys and Ctrl+A selection on standard Edit controls (selection readback). Other
-modifier shortcuts require explicit `input_transport:"send_input"`. Physical
-SendInput delivery was unconfirmed on the validation host even when the API
-accepted events; check a real result. Channels never switch or replay on failure.
+modifier shortcuts require explicit `input_transport:"send_input"`. The Windows
+10 fixture verified SendInput named key, modifier, Unicode and pointer effects
+on 2026-10-26. Earlier unconfirmed attempts remain in the report; require a real
+postcondition for each target. Channels never switch or replay on failure.
 Secure desktops and higher-integrity input remain subject to Windows restrictions.
 Run `scripts/verify_windows_native.py --output result.json --check-send-input`.
+Use `--require-send-input` to make unconfirmed physical keyboard, Unicode or
+pointer results fail the test. A received shortcut alone does not prove that
+the provider implements its usual editing behavior; prefer semantic fill.
 
 ## Bind the intended target
 

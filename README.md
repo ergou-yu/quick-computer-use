@@ -1,6 +1,6 @@
 # QCU — Quick Computer Use
 
-**2.0.0.** QCU controls an explicitly selected browser page or
+**2.0.1.** QCU controls an explicitly selected browser page or
 desktop window with accessibility references. This revision binds references to
 a backend lifetime, target and observation; separates dispatch from verified
 results; and supports Windows UI Automation. Real Windows 10 native and CLI
@@ -8,7 +8,7 @@ fixtures are verified; persistent DOM/CDP, compact observations, cached queries
 and bounded batches retain their fast paths.
 
 Linux provides an AT-SPI2 semantic backend, an optional X11 screenshot/XTEST
-fallback and a GNOME 46/50 Wayland bridge for native screenshots and mouse/keyboard
+fallback and a GNOME 46-50 Wayland bridge for native screenshots and mouse/keyboard
 input. The GNOME extension is bundled and must be explicitly installed/enabled.
 Ordinary semantic actions, DOM/CDP, cached/compact reads and batches retain their
 fast paths. See [Linux setup and limits](references/linux.md) and
@@ -69,7 +69,7 @@ Preserve the selected target. Tests must use an independent `QCU_HOME`.
 |---|---|---|
 | macOS | `desktop_ax` | AX controls/actions, bounded window capture and safety checks |
 | Windows | `desktop_uia` | Semantic patterns; native HWND PNG screenshots and guarded mouse/keyboard message fallback; real WinForms verification |
-| Linux | `desktop_linux` | AT-SPI2 semantic controls; bound-window X11 capture/XTEST or GNOME 46/50 Wayland native bridge |
+| Linux | `desktop_linux` | AT-SPI2 semantic controls; bound-window X11 capture/XTEST or GNOME 46-50 Wayland native bridge |
 | HarmonyOS | `desktop_harmony` | Explicitly not implemented; registration extension point |
 
 Apple Events is an explicit **read-only legacy observer** in this preview; its
@@ -111,7 +111,7 @@ the default for all web ref actions.
 ## Tests
 
 See [TEST-REPORT.md](TEST-REPORT.md) for platform results,
-reproduction commands and the unconfirmed physical SendInput diagnostic.
+reproduction commands, strict physical SendInput checks and their target limits.
 
 ```bash
 QCU_HOME="$(mktemp -d)" python -m pytest -q

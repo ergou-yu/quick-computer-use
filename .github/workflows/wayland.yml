@@ -74,9 +74,9 @@ jobs:
       QCU_TEST_MULTIMONITOR: ${{ matrix.ubuntu == '26.04' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install current Ubuntu LTS GNOME
+      - name: Install this Ubuntu fixture's GNOME version
         run: |
-          # These archived images exercise GNOME 47/48 without upgrading them.
+          # Exercise the older GNOME versions without upgrading the images.
           if test '${{ matrix.ubuntu }}' = 24.10; then
             sed -i -e 's|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' -e 's|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
           fi
@@ -91,7 +91,7 @@ jobs:
           .venv/bin/python -m pip install -e '.[linux,dev]'
           useradd --create-home --shell /bin/bash qcu-ci
           chown -R qcu-ci:qcu-ci "$GITHUB_WORKSPACE"
-      - name: Run current LTS Wayland fixture as a desktop user
+      - name: Run isolated Wayland fixture as a desktop user
         run: runuser -u qcu-ci -- dbus-run-session -- bash scripts/verify_gnome_session.sh
       - name: Print compositor diagnostics and mirror owned evidence
         if: always()

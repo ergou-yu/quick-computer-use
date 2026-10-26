@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qcu"
-version = "2.0.0"
+version = "2.0.1"
 description = "Quick Computer Use — a faster computer-use skill that prefers a11y trees over screenshots"
 readme = "README.md"
 requires-python = ">=3.11"

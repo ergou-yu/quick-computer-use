@@ -1,4 +1,4 @@
-# Install QCU 2.0.0
+# Install QCU 2.0.1
 
 Python 3.11 or newer. Install into the environment that runs `qcu`; a different
 Python may have different dependencies and macOS permission identity.
@@ -12,7 +12,7 @@ Python may have different dependencies and macOS permission identity.
   and `.venv/bin/python -m pip install -e '.[linux,dev]'`.
   See [Linux setup](references/linux.md) for the distribution packages and session requirements.
 
-For GNOME 46/50 Wayland native fallback, run `python -m qcu.gnome_bridge install`
+For GNOME 46-50 Wayland native fallback, run `python -m qcu.gnome_bridge install`
 in that Linux environment, then explicitly enable `qcu@quick-computer-use`
 with `gnome-extensions enable`. A first install may need a logout/login for
 GNOME discovery. AT-SPI semantic actions do not require this extension.
@@ -36,7 +36,7 @@ use `$json | & .\scripts\qcu.ps1 act -` (or `batch -`) to preserve JSON quoting.
 ## Packaged wheel
 
 ```bash
-python -m pip install 'qcu-2.0.0-py3-none-any.whl[macos]'
+python -m pip install 'qcu-2.0.1-py3-none-any.whl[macos]'
 ```
 
 On Windows replace `[macos]` with `[windows]`, on Linux with `[linux]`; omit extras for web. Chromium is
@@ -82,5 +82,8 @@ Native validation uses a separate disposable fixture with clicks, double/right
 click, hover, drag, wheel, Unicode typing, Ctrl+A selection and named keys,
 plus target movement/occlusion/focus/stale-ref checks. Secure/elevated desktop
 behavior and mixed monitor/DPI configurations remain outside this verification.
-The optional SendInput probe reports its own result separately from the verified
+Use `--require-send-input` for strict physical keyboard, modifier, Unicode and
+pointer checks; unknown results make the script fail. `--trace-input` optionally
+records packet metadata only while the owned fixture is foreground; it installs
+no permanent hooks. The optional SendInput probe reports separately from the verified
 HWND message channel; accepted events alone are not proof of delivery.

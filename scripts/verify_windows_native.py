@@ -29,6 +29,27 @@ public class QCUOverlay : Form {
 public class QCUSurface : Panel {
  public QCUSurface() { SetStyle(ControlStyles.Selectable,true); TabStop=true; }
 }
+public static class QCUKeyboardTrace {
+ delegate IntPtr HookProc(int code,IntPtr kind,IntPtr packet);
+ [StructLayout(LayoutKind.Sequential)] struct Packet { public uint vk,scan,flags,time; public UIntPtr extra; }
+ [DllImport("user32.dll",SetLastError=true)] static extern IntPtr SetWindowsHookEx(int id,HookProc callback,IntPtr module,uint thread);
+ [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook,int code,IntPtr kind,IntPtr packet);
+ [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
+ [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+ [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
+ static HookProc callback; static IntPtr hook,owned; static string path;
+ public static void Start(IntPtr window,string output) {
+  if(Environment.GetEnvironmentVariable("QCU_TRACE_INPUT")!="1") return;
+  owned=window; path=output;
+  callback=(code,kind,pointer)=>{ if(code>=0 && GetForegroundWindow()==owned) {
+   Packet p=(Packet)Marshal.PtrToStructure(pointer,typeof(Packet));
+   File.AppendAllText(path,"vk="+p.vk+" scan="+p.scan+" flags="+p.flags+" kind="+kind.ToInt64()+"\n");
+  } return CallNextHookEx(hook,code,kind,pointer); };
+  hook=SetWindowsHookEx(13,callback,GetModuleHandle(null),0);
+  File.AppendAllText(path,"hook="+hook.ToInt64()+" error="+Marshal.GetLastWin32Error()+"\n");
+ }
+ public static void Stop() { if(hook!=IntPtr.Zero) UnhookWindowsHookEx(hook); }
+}
 public class QCUInputFilter : IMessageFilter {
  Label trace; public QCUInputFilter(Label label) { trace=label; }
  public bool PreFilterMessage(ref Message m) { if(m.Msg==0x100 || m.Msg==0x201 || m.Msg==0x202) trace.Text="Raw "+m.Msg.ToString("X")+" "+m.WParam.ToInt64(); return false; }
@@ -70,7 +91,8 @@ public class QCUNativeFixture : Form {
   Label trace=new Label(); trace.Text="Raw idle"; trace.Bounds=new Rectangle(300,430,360,25); Application.AddMessageFilter(new QCUInputFilter(trace));
   Panel marker=new Panel(); marker.BackColor=Color.Red; marker.Bounds=new Rectangle(530,170,100,100); marker.AccessibleName="Capture marker";
   Controls.AddRange(new Control[]{edit,button,result,keys,surface,wheel,drag,hover,marker,trace});
-  Shown+=(s,e)=>{ FixtureForeground(); File.WriteAllText(ready,"{\"pid\":"+System.Diagnostics.Process.GetCurrentProcess().Id+",\"hwnd\":"+Handle.ToInt64()+"}"); };
+  Shown+=(s,e)=>{ FixtureForeground(); QCUKeyboardTrace.Start(Handle,ready+".keys"); File.WriteAllText(ready,"{\"pid\":"+System.Diagnostics.Process.GetCurrentProcess().Id+",\"hwnd\":"+Handle.ToInt64()+"}"); };
+  FormClosed+=(s,e)=>{ QCUKeyboardTrace.Stop(); };
   Timer timer=new Timer(); timer.Interval=30;
   timer.Tick+=(s,e)=>{ if(!File.Exists(commands)) return; string cmd=File.ReadAllText(commands).Trim();
    if(cmd=="overlay") { overlay=new QCUOverlay(); overlay.FormBorderStyle=FormBorderStyle.None; overlay.ShowInTaskbar=false; overlay.TopMost=true; overlay.BackColor=Color.Magenta; overlay.StartPosition=FormStartPosition.Manual; overlay.Bounds=new Rectangle(PointToScreen(surface.Location),surface.Size); overlay.Show(this); SetForegroundWindow(Handle); edit.Focus(); }
@@ -93,6 +115,7 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--check-send-input',action='store_true',help='record optional physical injection result separately')
     parser.add_argument('--require-send-input',action='store_true',help='require verified physical keyboard, Unicode and pointer results')
+    parser.add_argument('--trace-input',action='store_true',help='trace keyboard packet metadata only while the owned fixture is foreground')
     args=parser.parse_args()
     if sys.platform != 'win32':
         print(json.dumps(dict(ok=False,reason='requires_windows_interactive_desktop')))
@@ -109,13 +132,14 @@ def main():
     with tempfile.TemporaryDirectory(prefix='qcu-native-live-') as temp:
         scratch=Path(temp)
         env=dict(os.environ,QCU_HOME=str(scratch/'qcu-home'),PYTHONUTF8='1')
+        if args.trace_input: env['QCU_TRACE_INPUT']='1'
         env.pop('QCU_DAEMON_PROCESS',None)
         env.pop('QCU_USER_DATA_DIR',None)
         script,ready,commands=scratch/'fixture.ps1',scratch/'ready.json',scratch/'commands.txt'
         script.write_text(FIXTURE,encoding='utf-8-sig')
         child=subprocess.Popen(['powershell.exe','-NoProfile','-STA','-ExecutionPolicy','Bypass',
             '-File',str(script),'-ReadyPath',str(ready),'-CommandPath',str(commands),'-Title','QCU Native '+uuid.uuid4().hex[:8]],
-            stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,encoding='utf-8',errors='replace',creationflags=subprocess.CREATE_NO_WINDOW)
+            stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,encoding='utf-8',errors='replace',env=env,creationflags=subprocess.CREATE_NO_WINDOW)
 
         def call(*words,expected=0,payload=None):
             start=time.perf_counter()
@@ -202,7 +226,7 @@ def main():
             assert semantic['outcome']=='verified' and semantic['data']['method']=='UIA.value'
             if args.check_send_input or args.require_send_input:
                 fixture_command('clear_keys')
-                probe_key='F6' if args.require_send_input else 'F7'
+                probe_key='F7'
                 physical=act('press_key',dict(ref=fresh['Native input']['ref'],key=probe_key,input_transport='send_input',verify=condition(probe_key+' observed')),expected=None)
                 report['send_input_probe']=dict(verified=physical.get('outcome')=='verified',result=physical)
                 if args.require_send_input:
@@ -242,6 +266,8 @@ def main():
                 try: child.wait(timeout=3)
                 except subprocess.TimeoutExpired: child.kill(); child.wait(timeout=3)
             report['fixture_stopped']=child.poll() is not None
+            trace=Path(str(ready)+'.keys')
+            if trace.exists(): report['physical_key_trace']=trace.read_text(encoding='utf-8')
             args.output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(dict(ok=report['ok'],error=report.get('error'),commands=len(records),output=str(args.output)),ensure_ascii=False))
     return 0 if report['ok'] else 1
