@@ -74,7 +74,7 @@ def test_observe_argparse_has_new_flags():
     # Re-build the parser the same way main() does and inspect the actions.
     ap = argparse.ArgumentParser(prog="qcu")
     # cli.main builds its own parser internally; instead grep the source.
-    src = open(cli_mod.__file__).read()
+    src = open(cli_mod.__file__, encoding="utf-8").read()
     assert '"--app"' in src
     assert '"--pid"' in src
     assert '"--window"' in src
@@ -99,7 +99,7 @@ def test_session_start_handler_accepts_no_screenshot_fallback():
 
 def test_daemon_observe_forwards_new_params():
     """daemon server's observe lambda must pass app/pid/window through."""
-    src = open(__import__("qcu.daemon.server", fromlist=["x"]).__file__).read()
+    src = open(__import__("qcu.daemon.server", fromlist=["x"]).__file__, encoding="utf-8").read()
     assert "app=params.get" in src
     assert "pid=params.get" in src
     assert "window=params.get" in src

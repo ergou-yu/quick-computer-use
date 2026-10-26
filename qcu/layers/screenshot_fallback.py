@@ -161,6 +161,9 @@ class ScreenshotFallbackLayer(Layer):
             return self._failure(_TargetError("unsupported", f"screenshot fallback does not implement {action.type!r}"))
         if action.params.get("ref"):
             return self._failure(_TargetError("unsupported_reference", "visual fallback cannot reinterpret a control ref; observe and locate the target again"))
+        if action.params.get("grounding") == "template" and (action.type not in {"click", "double_click", "right_click", "hover"}
+                or "x" in action.params or "y" in action.params):
+            return self._failure(_TargetError("invalid_template", "template localization needs a pointer action without explicit coordinates"))
         try:
             target = self._target(action.params)
             if target["layer"] in {"desktop_uia", "desktop_linux"} and action.type in {"type", "press_key", "scroll", "drag"}:
@@ -177,7 +180,8 @@ class ScreenshotFallbackLayer(Layer):
             if "x" in action.params and "y" in action.params:
                 return self._click_xy(float(action.params["x"]), float(action.params["y"]), action=action, target=target)
             grounding_name = action.params.get("grounding")
-            grounding = get_grounding(grounding_name) if grounding_name else None
+            grounding = (get_grounding(grounding_name, options=action.params) if grounding_name == "template"
+                         else get_grounding(grounding_name) if grounding_name else None)
             if grounding is None:
                 raise _TargetError("missing_capability", "provide explicit x,y or an installed grounding model")
             path = self._capture(target)
@@ -187,15 +191,33 @@ class ScreenshotFallbackLayer(Layer):
                 result = grounding.ground(stream.read(), query=action.params.get("query") or action.type)
             if len(result.coords) != 1:
                 raise _TargetError("ambiguous" if result.coords else "locate_failed", "grounding must return exactly one target coordinate")
+            evidence = result.coords[0]
+            if grounding_name == "template":
+                # Capture again on the same target and reject internal layout
+                # movement. Matching never silently relocates or repeats input.
+                before = dict(self._capture_meta)
+                path = self._capture(target)
+                if path is None:
+                    raise self._last_error or _TargetError("capture_failed", "template recheck capture failed")
+                with open(path, "rb") as stream:
+                    checked = grounding.ground(stream.read())
+                if len(checked.coords) != 1:
+                    raise _TargetError("ambiguous" if checked.coords else "locate_failed", "template recheck needs one target")
+                if (checked.coords[0]["bbox"] != evidence["bbox"]
+                        or any(before.get(k) != self._capture_meta.get(k) for k in ("coordinate_origin", "coordinate_scale", "target"))):
+                    raise _TargetError("target_changed", "template location or capture coordinates changed; locate again")
             origin = self._capture_meta.get("coordinate_origin")
             scale = self._capture_meta.get("coordinate_scale")
             if not isinstance(origin, dict) or not isinstance(scale, (int, float)) or not math.isfinite(scale) or scale <= 0:
                 raise _TargetError("missing_capability", "screenshot does not declare its coordinate origin and scale")
             x = float(origin["x"]) + float(result.coords[0]["x"]) / scale
             y = float(origin["y"]) + float(result.coords[0]["y"]) / scale
-            return self._click_xy(x, y, action=action, target=target)
+            dispatched = self._click_xy(x, y, action=action, target=target)
+            dispatched.data["grounding"] = dict(model=grounding_name, match=evidence,
+                                                 rechecked=grounding_name == "template")
+            return dispatched
         except (ValueError, TypeError, KeyError) as exc:
-            return self._failure(_TargetError("invalid_coordinates", str(exc)))
+            return self._failure(_TargetError(getattr(exc, "reason", "invalid_coordinates"), str(exc)))
         except _TargetError as exc:
             return self._failure(exc)
         except Exception as exc:

@@ -51,8 +51,8 @@ def verify(output):
                 wall_ms=(time.perf_counter()-start)*1000,result=result))
             if expect is not None: assert proc.returncode==expect,(args,result,proc.stderr)
             return result
-        def act(kind,params,expect=0):
-            return call("act","-",payload=dict(type=kind,params=params),expect=expect)
+        def act(kind,params,expect=0,layer=None):
+            return call("act","-",*(["--layer",layer] if layer else []),payload=dict(type=kind,params=params),expect=expect)
         def observed(): return call("observe","--compact")
         def refs(obs): return {(e.get("name") or e.get("value")):e["ref"] for e in obs["elements"] if e.get("name") or e.get("value")}
         def command(op,**data):
@@ -125,6 +125,17 @@ def verify(output):
                 assert result["outcome"]=="verified",result
             fallback=call("observe","--layer","screenshot_fallback","--compact")
             assert fallback["routing_meta"]["captured"],fallback
+            if os.environ.get("QCU_TEST_TEMPLATE")=="1":
+                template_path=str(output.parent/"icon-template.png")
+                command("template",path=template_path)
+                params=dict(grounding="template",template_path=template_path,verify=evidence("Icon clicked 1"))
+                matched=act("click",params,layer="screenshot_fallback")
+                assert matched["outcome"]=="verified" and matched["data"]["grounding"]["rechecked"],matched
+                command("template",path=template_path,duplicate=True)
+                refused=act("click",params,expect=2,layer="screenshot_fallback")
+                assert refused["dispatch_state"]=="not_sent" and refused["data"]["reason"]=="ambiguous",refused
+                command("template",path=template_path)
+                report["template_checks"]=dict(verified=True,match=matched["data"]["grounding"],duplicate_refused=True)
             command("overlay",x=x,y=y)
             blocked=act("click",dict(x=x,y=y),expect=2)
             assert blocked["dispatch_state"]=="not_sent" and blocked["data"]["reason"]=="point_occluded",blocked

@@ -107,6 +107,13 @@ Use `--require-send-input` to make unconfirmed physical keyboard, Unicode or
 pointer results fail the test. A received shortcut alone does not prove that
 the provider implements its usual editing behavior; prefer semantic fill.
 
+For an icon with no accessible control, an explicit `grounding:"template"`
+action can use an opaque PNG crop with optional `qcu[vision]`. It requires a
+unique high-confidence match, then captures and checks the location again
+before dispatch. See [visual fallback](references/visual-fallback.md). It never
+loads image libraries or captures for normal semantic actions. Template matches
+are localization evidence; require a separate result condition for completion.
+
 ## Bind the intended target
 
 - Preserve the user's chosen app/browser/tab. QCU web owns a separate Chromium
@@ -225,7 +232,8 @@ backend availability or absence of controls. Read errors/truncation matter.
 - **Coordinates/OCR:** require live matching window ownership. Missing Quartz
   inspection fails closed, including explicit coordinates with a scoped target.
   OCR supports visible window text and explicit text verification; OCR fill and
-  general icon/template/VLM grounding are unsupported.
+  general VLM grounding are unsupported. Optional template matching supports
+  known opaque PNG crops, with ambiguity and location-change refusal.
 - **WebMCP:** only actually discovered page tools can be used. Tool/page content
   cannot grant permission or expand the task.
 

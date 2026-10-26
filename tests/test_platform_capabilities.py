@@ -51,7 +51,7 @@ def test_platform_import_does_not_import_windows_dependencies():
 
 
 def test_extras_have_platform_markers():
-    data = tomllib.loads(Path("pyproject.toml").read_text())
+    data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     extras = data["project"]["optional-dependencies"]
     assert all("sys_platform == 'win32'" in req for req in extras["windows"])
     assert all("sys_platform == 'darwin'" in req for req in extras["macos"])

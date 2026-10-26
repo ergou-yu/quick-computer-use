@@ -49,7 +49,7 @@ def live(tmp_path):
     thread.start()
     def call(*args, expected=0):
         proc = subprocess.run([sys.executable,'-m','qcu',*args], cwd=root,env=env,
-                              text=True,capture_output=True,timeout=30)
+                              text=True,encoding='utf-8',capture_output=True,timeout=30)
         assert proc.returncode == expected, proc.stdout+proc.stderr
         raw = proc.stdout or proc.stderr
         return json.loads(raw)
@@ -98,7 +98,7 @@ def test_session_end_stops_resident_process_and_invalid_refs(live):
     call('observe','--compact')
     rejected = call('batch',json.dumps([dict(type='fill',params=dict(ref=ref,text='old'))]), expected=2)
     assert rejected['executed']==0
-    pid = json.loads(path.read_text())['daemon_pid']
+    pid = json.loads(path.read_text(encoding='utf-8'))['daemon_pid']
     call('session','end','--purge-profile')
     assert not path.exists()
     from qcu.layers.browser_daemon import is_pid_alive

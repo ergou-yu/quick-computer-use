@@ -894,7 +894,7 @@ def route(features_arg: str) -> int:
     if features_arg == "-":
         feats_raw = sys.stdin.read()
     else:
-        feats_raw = Path(features_arg).read_text()
+        feats_raw = Path(features_arg).read_text(encoding="utf-8")
     feats = json.loads(feats_raw) if feats_raw.strip() else {}
     decision = classify(feats, last_action=None)
     print(json.dumps(decision.to_dict(), ensure_ascii=False, indent=2))

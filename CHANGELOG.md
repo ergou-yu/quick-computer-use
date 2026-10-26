@@ -3,6 +3,20 @@
 All notable changes to this project are documented in this file. Versions
 follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Fix Windows partial SendInput cleanup to release only unmatched key/button
+  downs in the acknowledged prefix. Reject a requested physical key that is
+  already held, preserving the user's input state. No input is replayed.
+- Add optional, lazily loaded local PNG template matching for painted icons.
+  Reject constant/transparent templates, low confidence, duplicate matches and
+  changed locations on a second target-bound capture. Preserve result readback.
+- Add real Windows and virtual Linux painted-icon/duplicate fixtures, image
+  contract tests and distinct-result physical input stress rounds. A direct
+  Win32 probe reproduced accepted-but-undelivered F7 input; its root cause is
+  still unresolved. Do not interpret SendInput acceptance as successful input.
+
+
 ## [2.0.1] — 2026-10-26
 
 - Plan a corner-exit waypoint before native pointer dispatch, allowing GNOME

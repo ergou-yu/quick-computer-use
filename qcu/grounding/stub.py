@@ -7,8 +7,8 @@ coordinates or a structured element reference. Common choices:
 - **Florence-2** (Microsoft) — phrase-grounding VLM.
 - **Set-of-Mark (SoM)** — GPT-4V marks a screenshot with numbered tags.
 
-This MVP ships only the Protocol. Implementations live outside the core
-package and can be plugged in via ``GroundingRegistry.register(...)``.
+An optional local template matcher is loaded lazily. External implementations
+can be plugged in via ``register(...)``.
 """
 
 from __future__ import annotations
@@ -57,7 +57,10 @@ def register(name: str) -> Any:
     return deco
 
 
-def get(name: str) -> Optional[GroundingModel]:
+def get(name: str, *, options=None) -> Optional[GroundingModel]:
+    if name == "template":
+        from qcu.grounding.template import TemplateGrounder
+        return TemplateGrounder.from_options(options or {})
     cls = _REGISTRY.get(name)
     if cls is None:
         return None
@@ -65,4 +68,4 @@ def get(name: str) -> Optional[GroundingModel]:
 
 
 def available() -> list[str]:
-    return sorted(_REGISTRY.keys())
+    return sorted(set(_REGISTRY) | {"template"})

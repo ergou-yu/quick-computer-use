@@ -43,7 +43,9 @@ public static class QCUKeyboardTrace {
   owned=window; path=output;
   callback=(code,kind,pointer)=>{ if(code>=0 && GetForegroundWindow()==owned) {
    Packet p=(Packet)Marshal.PtrToStructure(pointer,typeof(Packet));
-   File.AppendAllText(path,"vk="+p.vk+" scan="+p.scan+" flags="+p.flags+" kind="+kind.ToInt64()+"\n");
+   IntPtr next=CallNextHookEx(hook,code,kind,pointer);
+   File.AppendAllText(path,"vk="+p.vk+" scan="+p.scan+" flags="+p.flags+" kind="+kind.ToInt64()+" extra="+p.extra.ToUInt64()+" next="+next.ToInt64()+"\n");
+   return next;
   } return CallNextHookEx(hook,code,kind,pointer); };
   hook=SetWindowsHookEx(13,callback,GetModuleHandle(null),0);
   File.AppendAllText(path,"hook="+hook.ToInt64()+" error="+Marshal.GetLastWin32Error()+"\n");
@@ -68,7 +70,12 @@ public class QCUNativeFixture : Form {
   finally { if(attached) AttachThreadInput(current,other,false); }
  }
  Label result=new Label(), keys=new Label(), wheel=new Label(), drag=new Label(), hover=new Label();
- TextBox edit=new TextBox(); QCUSurface surface=new QCUSurface(); int clicks=0, rights=0, doubles=0, wheels=0;
+ TextBox edit=new TextBox(); QCUSurface surface=new QCUSurface(); int clicks=0, rights=0, doubles=0, wheels=0, sevens=0, eights=0, icons=0;
+ Rectangle icon=new Rectangle(280,45,40,40); bool duplicateIcon=false;
+ void PaintIcon(Graphics g,Rectangle r) {
+  g.FillRectangle(Brushes.Navy,r); g.FillEllipse(Brushes.Gold,r.X+3,r.Y+4,29,27);
+  g.FillRectangle(Brushes.White,r.X+20,r.Y+22,16,12); g.DrawLine(Pens.Red,r.X+4,r.Y+34,r.X+35,r.Y+5);
+ }
  bool dragging=false; Point start; Form overlay; string commands;
  public QCUNativeFixture(string title,string ready,string command) {
   Text=title; commands=command; Size=new Size(720,540); StartPosition=FormStartPosition.CenterScreen; TopMost=true;
@@ -77,10 +84,11 @@ public class QCUNativeFixture : Form {
   button.Click+=(s,e)=>{ result.Text="Clicked "+(++clicks); };
   result.Text="Idle"; result.Bounds=new Rectangle(180,70,250,28);
   keys.Text="Keys idle"; keys.Bounds=new Rectangle(20,110,400,25);
-  edit.KeyDown+=(s,e)=>{ if(e.Control && e.KeyCode==Keys.A) keys.Text="Ctrl+A observed"; if(e.KeyCode==Keys.F6) keys.Text="F6 observed"; if(e.KeyCode==Keys.F7) keys.Text="F7 observed"; if(e.Control && e.KeyCode==Keys.F8) keys.Text="Ctrl+F8 observed"; };
+  edit.KeyDown+=(s,e)=>{ if(e.Control && e.KeyCode==Keys.A) keys.Text="Ctrl+A observed"; if(e.KeyCode==Keys.F6) keys.Text="F6 observed"; if(e.KeyCode==Keys.F7) keys.Text="F7 observed "+(++sevens); if(e.Control && e.KeyCode==Keys.F8) keys.Text="Ctrl+F8 observed "+(++eights); };
   edit.PreviewKeyDown+=(s,e)=>{ if(e.KeyCode==Keys.F6 || e.KeyCode==Keys.F7 || e.KeyCode==Keys.F8) e.IsInputKey=true; };
   surface.AccessibleName="Native surface"; surface.BackColor=Color.FromArgb(30,140,230); surface.Bounds=new Rectangle(20,170,440,180);
-  surface.MouseDown+=(s,e)=>{ surface.Focus(); if(e.Button==MouseButtons.Left) { dragging=true; start=e.Location; } if(e.Button==MouseButtons.Right) result.Text="Right "+(++rights); };
+  surface.Paint+=(s,e)=>{ PaintIcon(e.Graphics,icon); if(duplicateIcon) PaintIcon(e.Graphics,new Rectangle(340,45,40,40)); };
+  surface.MouseDown+=(s,e)=>{ surface.Focus(); if(e.Button==MouseButtons.Left) { dragging=true; start=e.Location; if(icon.Contains(e.Location)) result.Text="Icon "+(++icons); } if(e.Button==MouseButtons.Right) result.Text="Right "+(++rights); };
   surface.MouseUp+=(s,e)=>{ if(dragging && Math.Abs(e.X-start.X)>40) drag.Text="Drag done"; dragging=false; };
   surface.MouseDoubleClick+=(s,e)=>{ result.Text="Double "+(++doubles); };
   surface.MouseEnter+=(s,e)=>{ hover.Text="Hover observed"; };
@@ -91,7 +99,7 @@ public class QCUNativeFixture : Form {
   Label trace=new Label(); trace.Text="Raw idle"; trace.Bounds=new Rectangle(300,430,360,25); Application.AddMessageFilter(new QCUInputFilter(trace));
   Panel marker=new Panel(); marker.BackColor=Color.Red; marker.Bounds=new Rectangle(530,170,100,100); marker.AccessibleName="Capture marker";
   Controls.AddRange(new Control[]{edit,button,result,keys,surface,wheel,drag,hover,marker,trace});
-  Shown+=(s,e)=>{ FixtureForeground(); QCUKeyboardTrace.Start(Handle,ready+".keys"); File.WriteAllText(ready,"{\"pid\":"+System.Diagnostics.Process.GetCurrentProcess().Id+",\"hwnd\":"+Handle.ToInt64()+"}"); };
+  Shown+=(s,e)=>{ FixtureForeground(); QCUKeyboardTrace.Start(Handle,ready+".keys"); Rectangle r=surface.RectangleToScreen(icon); File.WriteAllText(ready,"{\"pid\":"+System.Diagnostics.Process.GetCurrentProcess().Id+",\"hwnd\":"+Handle.ToInt64()+",\"icon_rect\":["+r.X+","+r.Y+","+r.Width+","+r.Height+"]}"); };
   FormClosed+=(s,e)=>{ QCUKeyboardTrace.Stop(); };
   Timer timer=new Timer(); timer.Interval=30;
   timer.Tick+=(s,e)=>{ if(!File.Exists(commands)) return; string cmd=File.ReadAllText(commands).Trim();
@@ -99,6 +107,8 @@ public class QCUNativeFixture : Form {
    if(cmd=="clear") { if(overlay!=null) overlay.Close(); FixtureForeground(); }
    if(cmd=="move") { Location=new Point(Left+45,Top+20); }
    if(cmd=="clear_keys") { keys.Text="Keys idle"; FixtureForeground(); }
+   if(cmd=="icon_duplicate") { duplicateIcon=true; surface.Invalidate(); surface.Update(); FixtureForeground(); }
+   if(cmd=="icon_single") { duplicateIcon=false; surface.Invalidate(); surface.Update(); FixtureForeground(); }
    if(cmd=="background") { overlay=new Form(); overlay.Text="QCU disposable other foreground"; overlay.Size=new Size(200,120); overlay.Show(); overlay.Activate(); SetForegroundWindow(overlay.Handle); }
    File.Delete(commands);
   }; timer.Start();
@@ -116,7 +126,11 @@ def main():
     parser.add_argument('--check-send-input',action='store_true',help='record optional physical injection result separately')
     parser.add_argument('--require-send-input',action='store_true',help='require verified physical keyboard, Unicode and pointer results')
     parser.add_argument('--trace-input',action='store_true',help='trace keyboard packet metadata only while the owned fixture is foreground')
+    parser.add_argument('--physical-rounds',type=int,default=1,help='1..100 distinct physical rounds with fresh result counters (requires --require-send-input)')
+    parser.add_argument('--check-template',action='store_true',help='verify local template click and duplicate refusal on a real painted icon (qcu[vision])')
     args=parser.parse_args()
+    if not 1 <= args.physical_rounds <= 100 or (args.physical_rounds != 1 and not args.require_send_input):
+        parser.error('--physical-rounds needs 1..100 and --require-send-input')
     if sys.platform != 'win32':
         print(json.dumps(dict(ok=False,reason='requires_windows_interactive_desktop')))
         return 2
@@ -182,6 +196,14 @@ def main():
             image=(artifacts/'before.png').read_bytes()
             assert image[:8]==b'\x89PNG\r\n\x1a\n'
             assert struct.unpack('>II',image[16:24])==(first['data']['width'],first['data']['height'])
+            template_path=artifacts/'icon-template.png'
+            if args.check_template:
+                import cv2
+                image=cv2.imread(str(artifacts/'before.png'))
+                x,y,w,h=target['icon_rect']
+                origin=first['data']['coordinate_origin']
+                x,y=x-origin['x'],y-origin['y']
+                assert cv2.imwrite(str(template_path),image[y:y+h,x:x+w])
             fixture_command('clear')
             assert act('press_key',dict(ref=edit,key='F6',verify=condition('F6 observed')))['outcome']=='verified'
             click=act('click',{**point(elements['Native click']),'verify':condition('Clicked 1')})
@@ -224,24 +246,43 @@ def main():
             # Original fast semantic route remains available after native operations.
             semantic=act('fill',dict(ref=fresh['Native input']['ref'],text='UIA fast route retained'))
             assert semantic['outcome']=='verified' and semantic['data']['method']=='UIA.value'
+            if args.check_template:
+                fixture_command('clear')
+                params=dict(grounding='template',template_path=str(template_path),verify=condition('Icon 1'))
+                matched=act('click',params,layer='screenshot_fallback')
+                assert matched['outcome']=='verified' and matched['data']['grounding']['rechecked'],matched
+                fixture_command('icon_duplicate')
+                refused=act('click',params,expected=2,layer='screenshot_fallback')
+                assert refused['dispatch_state']=='not_sent' and refused['data']['reason']=='ambiguous',refused
+                fixture_command('icon_single')
+                report['template_checks']=dict(verified=True,checks=['painted icon result readback','duplicate refused before input'],match=matched['data']['grounding'])
             if args.check_send_input or args.require_send_input:
                 fixture_command('clear_keys')
                 probe_key='F7'
-                physical=act('press_key',dict(ref=fresh['Native input']['ref'],key=probe_key,input_transport='send_input',verify=condition(probe_key+' observed')),expected=None)
+                physical=act('press_key',dict(ref=fresh['Native input']['ref'],key=probe_key,input_transport='send_input',verify=condition(probe_key+' observed 1')),expected=None)
                 report['send_input_probe']=dict(verified=physical.get('outcome')=='verified',result=physical)
                 if args.require_send_input:
                     assert physical.get('outcome')=='verified',physical
                     # Distinct requested actions, each with independent result readback.
-                    combo=act('press_key',dict(ref=fresh['Native input']['ref'],key='Ctrl+F8',input_transport='send_input',verify=condition('Ctrl+F8 observed')))
-                    assert combo['outcome']=='verified',combo
-                    # Prepare an empty field semantically. A received Ctrl+A is
-                    # not proof that this provider implements Select All.
-                    assert act('fill',dict(ref=fresh['Native input']['ref'],text=''))['outcome']=='verified'
-                    typed=act('type',dict(ref=fresh['Native input']['ref'],text='Physical 中文 🚀',input_transport='send_input',verify=dict(kind='value',ref=fresh['Native input']['ref'],equals='Physical 中文 🚀',timeout_ms=2000)))
-                    assert typed['outcome']=='verified',typed
-                    clicked=act('click',{**point(fresh['Native click']),'input_transport':'send_input','verify':condition('Clicked 3')})
-                    assert clicked['outcome']=='verified',clicked
-                    report['send_input_required']=dict(verified=True,checks=[probe_key,'Ctrl+F8','Unicode value','pointer click'])
+                    rounds=[]
+                    report['physical_rounds']=rounds
+                    for index in range(1,args.physical_rounds+1):
+                        if index > 1:
+                            fixture_command('clear_keys')
+                            physical=act('press_key',dict(ref=fresh['Native input']['ref'],key=probe_key,input_transport='send_input',verify=condition('F7 observed '+str(index))))
+                            assert physical['outcome']=='verified',physical
+                        combo=act('press_key',dict(ref=fresh['Native input']['ref'],key='Ctrl+F8',input_transport='send_input',verify=condition('Ctrl+F8 observed '+str(index))))
+                        assert combo['outcome']=='verified',combo
+                        # UIA prepares replacement; a shortcut event alone does
+                        # not prove that the provider implements Select All.
+                        assert act('fill',dict(ref=fresh['Native input']['ref'],text=''))['outcome']=='verified'
+                        text='Physical 中文 🚀 '+str(index)
+                        typed=act('type',dict(ref=fresh['Native input']['ref'],text=text,input_transport='send_input',verify=dict(kind='value',ref=fresh['Native input']['ref'],equals=text,timeout_ms=2000)))
+                        assert typed['outcome']=='verified',typed
+                        clicked=act('click',{**point(fresh['Native click']),'input_transport':'send_input','verify':condition('Clicked '+str(index+2))})
+                        assert clicked['outcome']=='verified',clicked
+                        rounds.append(dict(round=index,verified=True,checks=[probe_key,'Ctrl+F8','Unicode value','pointer click']))
+                    report['send_input_required']=dict(verified=True,rounds=len(rounds),checks_per_round=4)
                 observe()  # Read after dispatch; never repeat an unconfirmed input.
             report['ok']=True
         except Exception as exc:

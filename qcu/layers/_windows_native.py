@@ -79,6 +79,26 @@ def unicode_events(text: str) -> list[INPUT]:
             for unit in units for flags in (4, 6)]
 
 
+def _pending_releases(events):
+    """Release only unmatched downs in an acknowledged prefix, in reverse order."""
+    pending = {}
+    for event in events:
+        if event.type == 1:
+            key = (1, event.ki.wVk, event.ki.wScan, event.ki.dwFlags & 5)
+            if event.ki.dwFlags & 2:
+                pending.pop(key, None)
+            else:
+                pending[key] = INPUT(type=1, ki=KEYBDINPUT(wVk=event.ki.wVk, wScan=event.ki.wScan,
+                                    dwFlags=event.ki.dwFlags | 2, dwExtraInfo=event.ki.dwExtraInfo))
+        elif event.type == 0:
+            down = {2: 4, 8: 16}.get(event.mi.dwFlags)
+            if down:
+                pending[(0, down)] = INPUT(type=0, mi=MOUSEINPUT(dwFlags=down, dwExtraInfo=event.mi.dwExtraInfo))
+            else:
+                pending.pop((0, event.mi.dwFlags), None)
+    return list(reversed(list(pending.values())))
+
+
 def _png(width, height, bgr, stride):
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind+data))
@@ -297,6 +317,9 @@ class WindowsNative:
             # Recheck right at the only input boundary; never activate or retry.
             if self.geometry(target) != bounds or self.focus(target) != live_focus:
                 raise NativeError("target_changed", "Window geometry/focus changed before input")
+            if kind == "press_key" and any(self.user.GetAsyncKeyState(event.ki.wVk) & 0x8000
+                                           for event in events if event.ki.wVk and not event.ki.dwFlags & 2):
+                raise NativeError("input_busy", "A requested physical key is already pressed")
             def move_cursor(location):
                 self._point_gate(target, bounds, location)
                 if self.focus(target) != live_focus:
@@ -322,14 +345,16 @@ class WindowsNative:
             except Exception as exc:
                 raise NativeError("outcome_unknown", str(exc), dispatched=True) from None
             if inserted != len(events):
-                # Only release keys/buttons potentially left down, never replay input.
-                releases = [e for e in events if (e.type == 1 and e.ki.dwFlags & 2)
-                            or (e.type == 0 and e.mi.dwFlags in (4, 16))]
-                if inserted and releases:
+                # Do not release keys that were never sent, or balanced pairs.
+                # In particular, one accepted Ctrl down must not send A up.
+                releases = _pending_releases(events[:inserted]) if type(inserted) is int and 0 < inserted < len(events) else []
+                cleanup_inserted = None
+                if releases:
                     with contextlib.suppress(Exception):
-                        self.user.SendInput(len(releases), (INPUT * len(releases))(*releases), c.sizeof(INPUT))
+                        cleanup_inserted = self.user.SendInput(len(releases), (INPUT * len(releases))(*releases), c.sizeof(INPUT))
                 raise NativeError("outcome_unknown", "SendInput acknowledgement incomplete; inspect before another action",
-                                  dispatched=True, requested=len(events), inserted=inserted)
+                                  dispatched=True, requested=len(events), inserted=inserted,
+                                  cleanup_requested=len(releases), cleanup_inserted=cleanup_inserted)
             if kind == "drag":
                 try:
                     for intermediate in path:

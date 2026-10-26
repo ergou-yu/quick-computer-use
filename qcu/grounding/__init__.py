@@ -1,4 +1,4 @@
-"""Grounding model interface (stub-only in MVP)."""
+"""Grounding interface with an optional, lazily loaded local template matcher."""
 
 from qcu.grounding.stub import GroundingModel, GroundingResult, available, get, register
 

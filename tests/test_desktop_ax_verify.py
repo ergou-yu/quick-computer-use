@@ -324,5 +324,5 @@ def test_observe_populates_focused_from_axfocused(monkeypatch):
     monkeypatch.setattr(mod, "_ax_get", spy_ax_get)
     # Sanity: the attribute name string exists in the source (guards against
     # a revert that removes the query).
-    src = open(mod.__file__).read()
+    src = open(mod.__file__, encoding="utf-8").read()
     assert '"AXFocused"' in src, "observe must query AXFocused (not hardcode focused=False)"

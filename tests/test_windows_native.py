@@ -85,6 +85,41 @@ def test_partial_send_is_unknown_and_only_releases_not_replays():
     assert caught.value.dispatched and caught.value.reason == "outcome_unknown"
     assert len(native.calls) == 2
     assert all(e.ki.dwFlags & 2 for e in native.calls[1][1])
+    assert [e.ki.wVk for e in native.calls[1][1]] == [17]
+
+
+@pytest.mark.parametrize('accepted,release_keys', [(0, []), (1, [17]), (2, [65, 17]), (3, [17])])
+def test_partial_send_only_releases_unmatched_accepted_keys(accepted, release_keys):
+    native = fake_native()
+    original = native.user.SendInput
+    def partial(count, array, size):
+        original(count, array, size)
+        return accepted if len(native.calls) == 1 else count
+    native.user.SendInput = partial
+    with pytest.raises(NativeError) as caught:
+        native.dispatch({'window_id': 10}, 'press_key', {'key': 'Ctrl+A'})
+    assert caught.value.data['cleanup_requested'] == len(release_keys)
+    assert [e.ki.wVk for e in native.calls[1][1]] == release_keys if release_keys else len(native.calls) == 1
+
+
+def test_partial_double_click_does_not_release_a_completed_click():
+    native = fake_native()
+    original = native.user.SendInput
+    def partial(count, array, size):
+        original(count, array, size)
+        return 2
+    native.user.SendInput = partial
+    with pytest.raises(NativeError):
+        native.dispatch({'window_id': 10}, 'double_click', {'x': 30, 'y': 40})
+    assert len(native.calls) == 1
+
+
+def test_held_primary_key_cannot_be_released_by_our_pair():
+    native = fake_native()
+    native.user.GetAsyncKeyState = lambda key: 0x8000 if key == 118 else 0
+    with pytest.raises(NativeError, match='already pressed'):
+        native.dispatch({'window_id': 10}, 'press_key', {'key': 'F7'})
+    assert native.calls == []
 
 
 def test_send_exception_is_unknown_and_not_retried():

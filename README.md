@@ -74,8 +74,9 @@ Preserve the selected target. Tests must use an independent `QCU_HOME`.
 
 Apple Events is an explicit **read-only legacy observer** in this preview; its
 positional action references cannot meet the new control guarantees. Start AX
-observation to obtain actionable refs. General icon/template/VLM grounding,
-HarmonyOS desktop control is not implemented. Windows native capture/input
+observation to obtain actionable refs. Optional local PNG template matching
+supports painted icons through `qcu[vision]`; see [visual fallback](references/visual-fallback.md).
+General VLM grounding and HarmonyOS desktop control are not implemented. Windows native capture/input
 uses no extra package or paid visual service. Physical SendInput is an explicit
 option with target-specific delivery; the verified default fallback uses HWND
 messages. Secure desktops and full provider parity are not claimed.

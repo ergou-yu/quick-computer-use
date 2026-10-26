@@ -15,6 +15,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+vision = [
+    "opencv-python-headless>=4.10,<5",
+]
 macos = [
     "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
