@@ -34,7 +34,7 @@ class TemplateGrounder:
         return cls(template_path=options.get("template_path"), threshold=options.get("template_threshold", .94),
                    scales=options.get("template_scales"), margin=options.get("template_margin", .03))
 
-    def _decode(self, data, *, limit):
+    def _decode(self, data, *, limit, require_opaque=False):
         if (len(data) > 32 * 1024 * 1024 or len(data) < 33 or data[:8] != b"\x89PNG\r\n\x1a\n"
                 or data[12:16] != b"IHDR"):
             raise TemplateError("invalid_template", "template matching requires a bounded PNG image")
@@ -48,7 +48,7 @@ class TemplateGrounder:
             raise TemplateError("invalid_template", "PNG must decode to an 8-bit image")
         if image.ndim == 2:
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        if image.shape[2] == 4:
+        if image.shape[2] == 4 and require_opaque:
             if not np.all(image[:, :, 3] == 255):
                 raise TemplateError("invalid_template", "use an opaque screenshot crop; transparent templates are unsupported")
             image = image[:, :, :3]
@@ -78,11 +78,18 @@ class TemplateGrounder:
                 raise TemplateError("invalid_template", str(exc)) from None
             if len(data) > 8 * 1024 * 1024:
                 raise TemplateError("invalid_template", "template file exceeds 8 MiB")
-            self._template = self._decode(data, limit=1024*1024)
+            self._template = self._decode(data, limit=1024*1024, require_opaque=True)
             # Spatial variance per channel: a solid red icon is still constant.
             if float(np.max(np.std(self._template.astype(float), axis=(0, 1)))) < 5:
                 raise TemplateError("invalid_template", "template needs spatial detail; a flat color cannot locate a target")
         image = self._decode(screenshot_bytes, limit=16*1024*1024)
+        transparent = None
+        if image.shape[2] == 4:
+            # Mutter captures may have transparent rounded frame corners.
+            # Ignore any candidate touching transparency, rather than matching
+            # its arbitrary hidden RGB pixels or rejecting the whole window.
+            transparent = cv2.integral((image[:, :, 3] != 255).astype(np.uint8))
+            image = image[:, :, :3]
         ih, iw = image.shape[:2]
         th, tw = self._template.shape[:2]
         peaks = []
@@ -96,6 +103,9 @@ class TemplateGrounder:
                 continue
             scores = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
             scores[~np.isfinite(scores)] = -1
+            if transparent is not None:
+                covered = transparent[h:, w:]-transparent[:-h, w:]-transparent[h:, :-w]+transparent[:-h, :-w]
+                scores[covered != 0] = -1
             for _ in range(6):
                 _, score, _, (x, y) = cv2.minMaxLoc(scores)
                 if score < self.threshold-self.margin:

@@ -70,6 +70,17 @@ def test_transparent_templates_are_rejected(scene):
         TemplateGrounder(template_path=str(path)).ground(png(image))
 
 
+def test_window_transparency_is_supported_but_hidden_icons_never_match(scene):
+    image, _, path = scene
+    alpha = np.full(image.shape[:2], 255, np.uint8)
+    alpha[:12, :12] = 0  # Rounded transparent window frame corner.
+    capture = np.dstack([image, alpha])
+    matcher = TemplateGrounder(template_path=str(path))
+    assert len(matcher.ground(png(capture)).coords) == 1
+    capture[40:60, 60:84, 3] = 0
+    assert matcher.ground(png(capture)).coords == []
+
+
 @pytest.mark.parametrize('options', [{'threshold': float('nan')}, {'scales': []}, {'scales': [float('inf')]}, {'margin': -1}])
 def test_invalid_configuration_fails_before_capture(options):
     with pytest.raises(TemplateError):
